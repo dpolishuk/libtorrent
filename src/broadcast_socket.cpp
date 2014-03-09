@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2007-2012, Arvid Norberg
+Copyright (c) 2007, Arvid Norberg
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -31,11 +31,6 @@ POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <boost/version.hpp>
-
-#include "libtorrent/config.hpp"
-#if defined TORRENT_OS2
-#include <pthread.h>
-#endif
 
 #include <boost/bind.hpp>
 
@@ -68,7 +63,9 @@ namespace libtorrent
 #if TORRENT_USE_IPV6
 			if (a.is_v6())
 			{
-				return a.to_v6() == address_v6::loopback();
+				return a.to_v6().is_loopback()
+					|| a.to_v6().is_link_local()
+					|| a.to_v6().is_multicast_link_local();
 			}
 #endif
 			address_v4 a4 = a.to_v4();

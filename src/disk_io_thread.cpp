@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2007-2012, Arvid Norberg
+Copyright (c) 2007, Arvid Norberg
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -611,7 +611,7 @@ namespace libtorrent
 				else
 				{
 					TORRENT_ASSERT(buf);
-					file::iovec_t b = { buf.get(), buffer_size };
+					file::iovec_t b = { buf.get(), size_t(buffer_size) };
 					int ret = p.storage->write_impl(&b, p.piece, (std::min)(
 						i * m_block_size, piece_size) - buffer_size, 1);
 					if (ret > 0) ++num_write_calls;
@@ -811,7 +811,7 @@ namespace libtorrent
 		if (buf)
 		{
 			l.unlock();
-			file::iovec_t b = { buf.get(), buffer_size };
+			file::iovec_t b = { buf.get(), size_t(buffer_size) };
 			ret = p.storage->read_impl(&b, p.piece, start_block * m_block_size, 1);
 			l.lock();
 			++m_cache_stats.reads;
@@ -824,8 +824,9 @@ namespace libtorrent
 			if (ret != buffer_size)
 			{
 				// this means the file wasn't big enough for this read
-				p.storage->get_storage_impl()->set_error(""
-					, errors::file_too_short);
+				char msg[70];
+				snprintf(msg, sizeof(msg), "reading p: %d b: %d s: %d (read: %d)", p.piece, start_block, buffer_size, ret);
+				p.storage->get_storage_impl()->set_error(msg, errors::file_too_short);
 				free_piece(p, l);
 				return -1;
 			}
@@ -855,8 +856,9 @@ namespace libtorrent
 			if (ret != buffer_size)
 			{
 				// this means the file wasn't big enough for this read
-				p.storage->get_storage_impl()->set_error(""
-					, errors::file_too_short);
+				char msg[70];
+				snprintf(msg, sizeof(msg), "reading p: %d b: %d s: %d (read: %d)", p.piece, start_block, buffer_size, ret);
+				p.storage->get_storage_impl()->set_error(msg, errors::file_too_short);
 				free_piece(p, l);
 				return -1;
 			}
@@ -916,7 +918,7 @@ namespace libtorrent
 		return ret;
 	}
 
-#if defined TORRENT_DEBUG && !defined TORRENT_DISABLE_INVARIANT_CHECKS
+#ifdef TORRENT_DEBUG
 	void disk_io_thread::check_invariant() const
 	{
 		int cached_write_blocks = 0;
@@ -1763,7 +1765,7 @@ namespace libtorrent
 #endif
 					TORRENT_ASSERT(j.buffer);
 					session_settings const* s = ((session_settings*)j.buffer);
-					TORRENT_ASSERT(s->cache_size >= 0);
+					TORRENT_ASSERT(s->cache_size >= -1);
 					TORRENT_ASSERT(s->cache_expiry > 0);
 
 #if defined TORRENT_WINDOWS
@@ -2019,7 +2021,7 @@ namespace libtorrent
 					}
 					else if (ret == -2)
 					{
-						file::iovec_t b = { j.buffer, j.buffer_size };
+						file::iovec_t b = { j.buffer, size_t(j.buffer_size) };
 						ret = j.storage->read_impl(&b, j.piece, j.offset, 1);
 						if (ret < 0)
 						{
@@ -2028,10 +2030,13 @@ namespace libtorrent
 						}
 						if (ret != j.buffer_size)
 						{
+							char msg[70];
+							snprintf(msg, sizeof(msg), "reading p: %d o: %d s: %d (read: %d)", j.piece, j.offset, j.buffer_size, ret);
+
 							// this means the file wasn't big enough for this read
 							j.buffer = 0;
 							j.error = errors::file_too_short;
-							j.error_file.clear();
+							j.error_file = msg;
 							j.str.clear();
 							ret = -1;
 							break;
@@ -2129,7 +2134,7 @@ namespace libtorrent
 						{
 							l.unlock();
 							ptime start = time_now_hires();
-							file::iovec_t iov = {j.buffer, j.buffer_size};
+							file::iovec_t iov = {j.buffer, size_t(j.buffer_size) };
 							ret = j.storage->write_impl(&iov, j.piece, j.offset, 1);
 							l.lock();
 							if (ret < 0)
@@ -2240,15 +2245,8 @@ namespace libtorrent
 					m_log << log_time() << " move" << std::endl;
 #endif
 					TORRENT_ASSERT(j.buffer == 0);
-					ret = j.storage->move_storage_impl(j.str, j.piece);
-					if (ret == piece_manager::file_exist)
-					{
-						j.error = error_code(boost::system::errc::file_exists, get_system_category());
-						j.error_file = -1;
-						j.buffer = NULL;
-						break;
-					}
-					if (ret != piece_manager::no_error && ret != piece_manager::need_full_check)
+					ret = j.storage->move_storage_impl(j.str);
+					if (ret != 0)
 					{
 						test_error(j);
 						break;

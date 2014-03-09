@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2006-2012, Arvid Norberg
+Copyright (c) 2006, Arvid Norberg
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -51,8 +51,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "libtorrent/kademlia/refresh.hpp"
 #include "libtorrent/kademlia/find_data.hpp"
-
-#include "ed25519.h"
+#include "libtorrent/rsa.hpp"
 
 namespace libtorrent { namespace dht
 {
@@ -61,15 +60,13 @@ void incoming_error(entry& e, char const* msg);
 
 using detail::write_endpoint;
 
-// TODO: 2 make this configurable in dht_settings
+// TODO: configurable?
 enum { announce_interval = 30 };
 
 #ifdef TORRENT_DHT_VERBOSE_LOGGING
 TORRENT_DEFINE_LOG(node)
-
-extern int g_failed_announces;
 extern int g_announces;
-
+extern int g_failed_announces;
 #endif
 
 // remove peers that have timed out
@@ -93,17 +90,19 @@ void purge_peers(std::set<peer_entry>& peers)
 
 void nop() {}
 
-node_impl::node_impl(alert_dispatcher* alert_disp
-	, udp_socket_interface* sock
+node_impl::node_impl(libtorrent::alert_manager& alerts
+	, bool (*f)(void*, entry&, udp::endpoint const&, int)
 	, dht_settings const& settings, node_id nid, address const& external_address
-	, dht_observer* observer)
+	, external_ip_fun ext_ip, void* userdata)
 	: m_settings(settings)
 	, m_id(nid == (node_id::min)() || !verify_id(nid, external_address) ? generate_id(external_address) : nid)
 	, m_table(m_id, 8, settings)
-	, m_rpc(m_id, m_table, sock, observer)
+	, m_rpc(m_id, m_table, f, userdata)
+	, m_ext_ip(ext_ip)
 	, m_last_tracker_tick(time_now())
-	, m_post_alert(alert_disp)
-	, m_sock(sock)
+	, m_alerts(alerts)
+	, m_send(f)
+	, m_userdata(userdata)
 {
 	m_secret[0] = random();
 	m_secret[1] = std::rand();
@@ -199,7 +198,7 @@ int node_impl::bucket_size(int bucket)
 void node_impl::new_write_key()
 {
 	m_secret[1] = m_secret[0];
-	m_secret[0] = random();
+	m_secret[0] = std::rand();
 }
 
 void node_impl::unreachable(udp::endpoint const& ep)
@@ -213,13 +212,29 @@ void node_impl::incoming(msg const& m)
 	lazy_entry const* y_ent = m.message.dict_find_string("y");
 	if (!y_ent || y_ent->string_length() == 0)
 	{
-		entry e;
-		incoming_error(e, "missing 'y' entry");
-		m_sock->send_packet(e, m.addr, 0);
+//		entry e;
+//		incoming_error(e, "missing 'y' entry");
+//		m_send(m_userdata, e, m.addr, 0);
 		return;
 	}
 
 	char y = *(y_ent->string_ptr());
+
+	lazy_entry const* ext_ip = m.message.dict_find_string("ip");
+	if (ext_ip && ext_ip->string_length() >= 4)
+	{
+		address_v4::bytes_type b;
+		memcpy(&b[0], ext_ip->string_ptr(), 4);
+		m_ext_ip(address_v4(b), aux::session_impl::source_dht, m.addr.address());
+	}
+#if TORRENT_USE_IPV6
+	else if (ext_ip && ext_ip->string_length() >= 16)
+	{
+		address_v6::bytes_type b;
+		memcpy(&b[0], ext_ip->string_ptr(), 16);
+		m_ext_ip(address_v6(b), aux::session_impl::source_dht, m.addr.address());
+	}
+#endif
 
 	switch (y)
 	{
@@ -235,7 +250,7 @@ void node_impl::incoming(msg const& m)
 			TORRENT_ASSERT(m.message.dict_find_string_value("y") == "q");
 			entry e;
 			incoming_request(m, e);
-			m_sock->send_packet(e, m.addr, 0);
+			m_send(m_userdata, e, m.addr, 0);
 			break;
 		}
 		case 'e':
@@ -272,7 +287,7 @@ namespace
 			, end(v.end()); i != end; ++i)
 		{
 #ifdef TORRENT_DHT_VERBOSE_LOGGING
-			TORRENT_LOG(node) << "  announce-distance: " << (160 - distance_exp(ih, i->first.id));
+			TORRENT_LOG(node) << "  distance: " << (160 - distance_exp(ih, i->first.id));
 #endif
 
 			void* ptr = node.m_rpc.allocate_observer();
@@ -403,11 +418,8 @@ void node_impl::status(session_status& s)
 void node_impl::lookup_peers(sha1_hash const& info_hash, int prefix, entry& reply
 	, bool noseed, bool scrape) const
 {
-	if (m_post_alert)
-	{
-		alert* a = new dht_get_peers_alert(info_hash);
-		if (!m_post_alert->post_alert(a)) delete a;
-	}
+	if (m_alerts.should_post<dht_get_peers_alert>())
+		m_alerts.post_alert(dht_get_peers_alert(info_hash));
 
 	table_t::const_iterator i = m_map.lower_bound(info_hash);
 	if (i == m_map.end()) return;
@@ -473,13 +485,13 @@ namespace
 		for (nodes_t::const_iterator i = nodes.begin()
 			, end(nodes.end()); i != end; ++i)
 		{
-			if (!i->addr().is_v4())
+			if (!i->addr.is_v4())
 			{
 				ipv6_nodes = true;
 				continue;
 			}
 			std::copy(i->id.begin(), i->id.end(), out);
-			write_endpoint(udp::endpoint(i->addr(), i->port()), out);
+			write_endpoint(udp::endpoint(i->addr, i->port), out);
 		}
 
 		if (ipv6_nodes)
@@ -489,12 +501,12 @@ namespace
 			for (nodes_t::const_iterator i = nodes.begin()
 				, end(nodes.end()); i != end; ++i)
 			{
-				if (!i->addr().is_v6()) continue;
+				if (!i->addr.is_v6()) continue;
 				endpoint.resize(18 + 20);
 				std::string::iterator out = endpoint.begin();
 				std::copy(i->id.begin(), i->id.end(), out);
 				out += 20;
-				write_endpoint(udp::endpoint(i->addr(), i->port()), out);
+				write_endpoint(udp::endpoint(i->addr, i->port), out);
 				endpoint.resize(out - endpoint.begin());
 				p.list().push_back(entry(endpoint));
 			}
@@ -621,6 +633,17 @@ void node_impl::incoming_request(msg const& m, entry& e)
 		return;
 	}
 
+	e["ip"] = endpoint_to_bytes(m.addr);
+/*
+	// if this nodes ID doesn't match its IP, tell it what
+	// its IP is with an error
+	// don't enforce this yet
+	if (!verify_id(id, m.addr.address()))
+	{
+		incoming_error(e, "invalid node ID");
+		return;
+	}
+*/
 	char const* query = top_level[0]->string_cstr();
 
 	lazy_entry const* arg_ent = top_level[1];
@@ -631,11 +654,6 @@ void node_impl::incoming_request(msg const& m, entry& e)
 
 	entry& reply = e["r"];
 	m_rpc.add_our_id(reply);
-
-	// if this nodes ID doesn't match its IP, tell it what
-	// its IP is
-	if (!verify_id(id, m.addr.address()))
-		reply["ip"] = address_to_bytes(m.addr.address());
 
 	if (strcmp(query, "ping") == 0)
 	{
@@ -676,10 +694,7 @@ void node_impl::incoming_request(msg const& m, entry& e)
 		if (msg_keys[3] && msg_keys[3]->int_value() != 0) scrape = true;
 		lookup_peers(info_hash, prefix, reply, noseed, scrape);
 #ifdef TORRENT_DHT_VERBOSE_LOGGING
-		if (reply.find_key("values"))
-		{
-			TORRENT_LOG(node) << " values: " << reply["values"].list().size();
-		}
+		if (reply.find_key("values")) TORRENT_LOG(node) << " values: " << reply["values"].list().size();
 #endif
 	}
 	else if (strcmp(query, "find_node") == 0)
@@ -697,7 +712,7 @@ void node_impl::incoming_request(msg const& m, entry& e)
 
 		sha1_hash target(msg_keys[0]->string_ptr());
 
-		// TODO: 1 find_node should write directly to the response entry
+		// TODO: find_node should write directly to the response entry
 		nodes_t n;
 		m_table.find_node(target, n, 0);
 		write_nodes_entry(reply, n);
@@ -741,11 +756,9 @@ void node_impl::incoming_request(msg const& m, entry& e)
 
 		sha1_hash info_hash(msg_keys[0]->string_ptr());
 
-		if (m_post_alert)
-		{
-			alert* a = new dht_announce_alert(m.addr.address(), port, info_hash);
-			if (!m_post_alert->post_alert(a)) delete a;
-		}
+		if (m_alerts.should_post<dht_announce_alert>())
+			m_alerts.post_alert(dht_announce_alert(
+				m.addr.address(), port, info_hash));
 
 		if (!verify_token(msg_keys[2]->string_value(), msg_keys[0]->string_ptr(), m.addr))
 		{
@@ -759,7 +772,7 @@ void node_impl::incoming_request(msg const& m, entry& e)
 		// the token was correct. That means this
 		// node is not spoofing its address. So, let
 		// the table get a chance to add it.
-		m_table.node_seen(id, m.addr, 0xffff);
+		m_table.node_seen(id, m.addr);
 
 		if (!m_map.empty() && int(m_map.size()) >= m_settings.max_torrents)
 		{
@@ -808,8 +821,8 @@ void node_impl::incoming_request(msg const& m, entry& e)
 			{"v", lazy_entry::none_t, 0, 0},
 			{"seq", lazy_entry::int_t, 0, key_desc_t::optional},
 			// public key
-			{"k", lazy_entry::string_t, 32, key_desc_t::optional},
-			{"sig", lazy_entry::string_t, 64, key_desc_t::optional},
+			{"k", lazy_entry::string_t, 268, key_desc_t::optional},
+			{"sig", lazy_entry::string_t, 256, key_desc_t::optional},
 		};
 
 		// attempt to parse the message
@@ -835,7 +848,7 @@ void node_impl::incoming_request(msg const& m, entry& e)
 		if (!mutable_put)
 			target = hasher(buf.first, buf.second).final();
 		else
-			target = hasher(msg_keys[3]->string_ptr(), 32).final();
+			target = sha1_hash(msg_keys[3]->string_ptr());
 
 //		fprintf(stderr, "%s PUT target: %s\n"
 //			, mutable_put ? "mutable":"immutable"
@@ -890,19 +903,22 @@ void node_impl::incoming_request(msg const& m, entry& e)
 			// generate the message digest by merging the sequence number and the
 			hasher digest;
 			char seq[20];
-			int len = snprintf(seq, sizeof(seq), "3:seqi%"PRId64"e1:v", msg_keys[2]->int_value());
+			int len = snprintf(seq, sizeof(seq), "3:seqi%" PRId64 "e1:v", msg_keys[2]->int_value());
 			digest.update(seq, len);
 			std::pair<char const*, int> buf = msg_keys[1]->data_section();
 			digest.update(buf.first, buf.second);
 
-			// msg_keys[4] is the signature, msg_keys[3] is the public key
-			if (ed25519_verify((unsigned char const*)msg_keys[4]->string_ptr()
-				, (unsigned char const*)buf.first, buf.second
-				, (unsigned char const*)msg_keys[3]->string_ptr()) != 0)
+#ifdef TORRENT_USE_OPENSSL
+			if (!verify_rsa(digest.final(), msg_keys[3]->string_ptr(), msg_keys[3]->string_length()
+				, msg_keys[4]->string_ptr(), msg_keys[4]->string_length()))
 			{
 				incoming_error(e, "invalid signature");
 				return;
 			}
+#else
+			incoming_error(e, "unsupported");
+			return;
+#endif
 
 			sha1_hash target = hasher(msg_keys[3]->string_ptr(), msg_keys[3]->string_length()).final();
 			dht_mutable_table_t::iterator i = m_mutable_table.find(target);
@@ -963,7 +979,7 @@ void node_impl::incoming_request(msg const& m, entry& e)
 			f = &i->second;
 		}
 
-		m_table.node_seen(id, m.addr, 0xffff);
+		m_table.node_seen(id, m.addr);
 
 		f->last_seen = time_now();
 

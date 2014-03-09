@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2007-2012, Arvid Norberg
+Copyright (c) 2007, Arvid Norberg
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -475,7 +475,6 @@ void upnp::on_reply(udp::endpoint const& from, char* buffer
 		// we don't have this device in our list. Add it
 		boost::tie(protocol, auth, d.hostname, d.port, d.path)
 			= parse_url_components(d.url, ec);
-		if (d.port == -1) d.port = protocol == "http" ? 80 : 443;
 
 		if (ec)
 		{
@@ -701,7 +700,7 @@ void upnp::update_map(rootdevice& d, int i, mutex::scoped_lock& l)
 		if (d.upnp_connection) d.upnp_connection->close();
 		d.upnp_connection.reset(new http_connection(m_io_service
 			, m_cc, boost::bind(&upnp::on_upnp_map_response, self(), _1, _2
-			, boost::ref(d), i, _5), true, default_max_bottled_buffer_size
+			, boost::ref(d), i, _5), true
 			, boost::bind(&upnp::create_port_mapping, self(), _1, boost::ref(d), i)));
 
 		d.upnp_connection->start(d.hostname, to_string(d.port).elems
@@ -712,7 +711,7 @@ void upnp::update_map(rootdevice& d, int i, mutex::scoped_lock& l)
 		if (d.upnp_connection) d.upnp_connection->close();
 		d.upnp_connection.reset(new http_connection(m_io_service
 			, m_cc, boost::bind(&upnp::on_upnp_unmap_response, self(), _1, _2
-			, boost::ref(d), i, _5), true, default_max_bottled_buffer_size
+			, boost::ref(d), i, _5), true
 			, boost::bind(&upnp::delete_port_mapping, self(), boost::ref(d), i)));
 		d.upnp_connection->start(d.hostname, to_string(d.port).elems
 			, seconds(10), 1);
@@ -934,7 +933,6 @@ void upnp::on_upnp_xml(error_code const& e
 	{
 		boost::tie(protocol, auth, d.hostname, d.port, d.path)
 			= parse_url_components(d.url, ec);
-		if (d.port == -1) d.port = protocol == "http" ? 80 : 443;
 		d.control_url = protocol + "://" + d.hostname + ":"
 			+ to_string(d.port).elems + s.control_url;
 	}
@@ -948,7 +946,6 @@ void upnp::on_upnp_xml(error_code const& e
 
 	boost::tie(protocol, auth, d.hostname, d.port, d.path)
 		= parse_url_components(d.control_url, ec);
-	if (d.port == -1) d.port = protocol == "http" ? 80 : 443;
 
 	if (ec)
 	{
@@ -962,7 +959,7 @@ void upnp::on_upnp_xml(error_code const& e
 
 	d.upnp_connection.reset(new http_connection(m_io_service
 		, m_cc, boost::bind(&upnp::on_upnp_get_ip_address_response, self(), _1, _2
-		, boost::ref(d), _5), true, default_max_bottled_buffer_size 
+		, boost::ref(d), _5), true
 		, boost::bind(&upnp::get_ip_address, self(), boost::ref(d))));
 	d.upnp_connection->start(d.hostname, to_string(d.port).elems
 		, seconds(10), 1);
@@ -1099,12 +1096,12 @@ namespace
 #if BOOST_VERSION >= 103500
 
 
-const char* upnp_error_category::name() const
+const char* upnp_error_category::name() const BOOST_SYSTEM_NOEXCEPT
 {
 	return "UPnP error";
 }
 
-std::string upnp_error_category::message(int ev) const
+std::string upnp_error_category::message(int ev) const BOOST_SYSTEM_NOEXCEPT
 {
 	int num_errors = sizeof(error_codes) / sizeof(error_codes[0]);
 	error_code_t* end = error_codes + num_errors;
@@ -1259,6 +1256,22 @@ void upnp::on_upnp_map_response(error_code const& e
 	if (!p.header_finished())
 	{
 		log("error while adding port map: incomplete http message", l);
+		next(d, mapping, l);
+		return;
+	}
+
+	std::string ct = p.header("content-type");
+	if (!ct.empty()
+		&& ct.find_first_of("text/xml") == std::string::npos
+		&& ct.find_first_of("text/soap+xml") == std::string::npos
+		&& ct.find_first_of("application/xml") == std::string::npos
+		&& ct.find_first_of("application/soap+xml") == std::string::npos
+		)
+	{
+		char msg[300];
+		snprintf(msg, sizeof(msg), "error while adding port map: invalid content-type, \"%s\". Expected text/xml or application/soap+xml"
+			, ct.c_str());
+		log(msg, l);
 		next(d, mapping, l);
 		return;
 	}

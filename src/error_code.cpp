@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2008-2012, Arvid Norberg
+Copyright (c) 2008, Arvid Norberg
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -40,12 +40,12 @@ namespace libtorrent
 {
 #if BOOST_VERSION >= 103500
 
-	const char* libtorrent_error_category::name() const throw()
+	const char* libtorrent_error_category::name() const BOOST_SYSTEM_NOEXCEPT
 	{
 		return "libtorrent error";
 	}
 
-	std::string libtorrent_error_category::message(int ev) const throw()
+	std::string libtorrent_error_category::message(int ev) const BOOST_SYSTEM_NOEXCEPT
 	{
 		static char const* msgs[] =
 		{
@@ -263,24 +263,12 @@ namespace libtorrent
 		return msgs[ev];
 	}
 
-	boost::system::error_category& get_libtorrent_category()
-	{
-		static libtorrent_error_category libtorrent_category;
-		return libtorrent_category;
-	}
-
-	boost::system::error_category& get_http_category()
-	{
-		static http_error_category http_category;
-		return http_category;
-	}
-
-	const char* http_error_category::name() const throw()
+	const char* http_error_category::name() const BOOST_SYSTEM_NOEXCEPT
 	{
 		return "http error";
 	}
 
-	std::string http_error_category::message(int ev) const throw()
+	std::string http_error_category::message(int ev) const BOOST_SYSTEM_NOEXCEPT
 	{
 		std::string ret;
 		ret += to_string(ev).elems;

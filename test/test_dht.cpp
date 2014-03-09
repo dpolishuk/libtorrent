@@ -36,56 +36,22 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "libtorrent/kademlia/node.hpp" // for verify_message
 #include "libtorrent/bencode.hpp"
 #include "libtorrent/socket_io.hpp" // for hash_address
+#include "libtorrent/rsa.hpp" // for generate_rsa_keys and sign_rsa
 #include "libtorrent/broadcast_socket.hpp" // for supports_ipv6
-#include "libtorrent/alert_dispatcher.hpp"
-
-#include "libtorrent/kademlia/node_id.hpp"
-#include "libtorrent/kademlia/routing_table.hpp"
 #include <iostream>
 
 #include "test.hpp"
-#include "setup_transfer.hpp"
 
 using namespace libtorrent;
 using namespace libtorrent::dht;
 
-sha1_hash to_hash(char const* s)
-{
-	sha1_hash ret;
-	from_hex(s, 40, (char*)&ret[0]);
-	return ret;
-}
-
-void add_and_replace(libtorrent::dht::node_id& dst, libtorrent::dht::node_id const& add)
-{
-	bool carry = false;
-	for (int k = 19; k >= 0; --k)
-	{
-		int sum = dst[k] + add[k] + (carry?1:0);
-		dst[k] = sum & 255;
-		carry = sum > 255;
-	}
-}
-
-void node_push_back(void* userdata, libtorrent::dht::node_entry const& n)
-{
-	using namespace libtorrent::dht;
-	std::vector<node_entry>* nv = (std::vector<node_entry>*)userdata;
-	nv->push_back(n);
-}
-
-void nop(void* userdata, libtorrent::dht::node_entry const& n) {}
-
 std::list<std::pair<udp::endpoint, entry> > g_responses;
 
-struct mock_socket : udp_socket_interface
+bool our_send(void* user, entry& msg, udp::endpoint const& ep, int flags)
 {
-	bool send_packet(entry& msg, udp::endpoint const& ep, int flags)
-	{
-		g_responses.push_back(std::make_pair(ep, msg));
-		return true;
-	}
-};
+	g_responses.push_back(std::make_pair(ep, msg));
+	return true;
+}
 
 address rand_v4()
 {
@@ -151,10 +117,7 @@ void send_dht_msg(node_impl& node, char const* msg, udp::endpoint const& ep
 	if (seq >= 0) a["seq"] = seq;
 	char msg_buf[1500];
 	int size = bencode(msg_buf, e);
-#if defined TORRENT_DEBUG && TORRENT_USE_IOSTREAM
-// this yields a lot of output. too much
 //	std::cerr << "sending: " <<  e << "\n";
-#endif
 
 	lazy_entry decoded;
 	error_code ec;
@@ -235,11 +198,9 @@ void announce_immutable_items(node_impl& node, udp::endpoint const* eps
 			{
 				TEST_EQUAL(parsed[4]->string_value(), "r");
 				token = parsed[2]->string_value();
-//				fprintf(stderr, "got token: %s\n", token.c_str());
 			}
 			else
 			{
-				fprintf(stderr, "msg: %s\n", print_entry(response).c_str());
 				fprintf(stderr, "   invalid get response: %s\n", error_string);
 				TEST_ERROR(error_string);
 			}
@@ -260,17 +221,14 @@ void announce_immutable_items(node_impl& node, udp::endpoint const* eps
 				{ "y", lazy_entry::string_t, 1, 0 }
 			};
 
+//			fprintf(stderr, "msg: %s\n", print_entry(response).c_str());
 			ret = verify_message(&response, desc2, parsed, 1, error_string, sizeof(error_string));
 			if (ret)
 			{
-				if (parsed[0]->string_value() != "r")
-					fprintf(stderr, "msg: %s\n", print_entry(response).c_str());
-
 				TEST_EQUAL(parsed[0]->string_value(), "r");
 			}
 			else
 			{
-				fprintf(stderr, "msg: %s\n", print_entry(response).c_str());
 				fprintf(stderr, "   invalid put response: %s\n", error_string);
 				TEST_ERROR(error_string);
 			}
@@ -311,25 +269,17 @@ void announce_immutable_items(node_impl& node, udp::endpoint const* eps
 //	TEST_CHECK(items_num.find(3) != items_num.end());
 }
 
-struct print_alert : alert_dispatcher
-{
-	virtual bool post_alert(alert* a)
-	{
-		fprintf(stderr, "ALERT: %s\n", a->message().c_str());
-		delete a;
-		return true;
-	}
-};
+void nop(address, int, address) {}
 
 int test_main()
 {
+	io_service ios;
+	alert_manager al(ios, 100);
 	dht_settings sett;
 	sett.max_torrents = 4;
 	sett.max_dht_items = 4;
 	address ext = address::from_string("236.0.0.1");
-	mock_socket s;
-	print_alert ad;
-	dht::node_impl node(&ad, &s, sett, node_id(0), ext, 0);
+	dht::node_impl node(al, &our_send, sett, node_id(0), ext, boost::bind(nop, _1, _2, _3), 0);
 
 	// DHT should be running on port 48199 now
 	lazy_entry response;
@@ -412,11 +362,9 @@ int test_main()
 	{
 		TEST_CHECK(parsed[0]->string_value() == "r");
 		token = parsed[2]->string_value();
-//		fprintf(stderr, "got token: %s\n", token.c_str());
 	}
 	else
 	{
-		fprintf(stderr, "msg: %s\n", print_entry(response).c_str());
 		fprintf(stderr, "   invalid get_peers response: %s\n", error_string);
 	}
 
@@ -454,11 +402,9 @@ int test_main()
 		{
 			TEST_CHECK(parsed[0]->string_value() == "r");
 			token = parsed[2]->string_value();
-//			fprintf(stderr, "got token: %s\n", token.c_str());
 		}
 		else
 		{
-			fprintf(stderr, "msg: %s\n", print_entry(response).c_str());
 			fprintf(stderr, "   invalid get_peers response: %s\n", error_string);
 		}
 		response.clear();
@@ -569,24 +515,24 @@ int test_main()
 
 	announce_immutable_items(node, eps, items, sizeof(items)/sizeof(items[0]));
 
+#ifdef TORRENT_USE_OPENSSL
+	// RSA functions are only implemented with openssl for now
+
 	// ==== get / put mutable items ===
 
-	fprintf(stderr, "generating ed25519 keys\n");
-	unsigned char seed[32];
-	ed25519_create_seed(seed);
-	unsigned char private_key[64];
-	unsigned char public_key[32];
+	char private_key[1192];
+	int private_len = sizeof(private_key);
+	char public_key[268];
+	int public_len = sizeof(public_key);
 
-	ed25519_create_keypair(public_key, private_key, seed);
-	fprintf(stderr, "pub: %s priv: %s\n"
-		, to_hex(std::string((char*)public_key, 32)).c_str()
-		, to_hex(std::string((char*)private_key, 64)).c_str());
+	fprintf(stderr, "generating RSA keys\n");
+	ret = generate_rsa_keys(public_key, &public_len, private_key, &private_len, 2048);
+	fprintf(stderr, "pub: %d priv:%d\n", public_len, private_len);
 
 	TEST_CHECK(ret);
 
 	send_dht_msg(node, "get", source, &response, "10", 0
-		, 0, no, 0, (char*)&hasher((char*)public_key, 32).final()[0]
-		, 0, false, false, std::string(), std::string(), 64);
+		, 0, no, 0, public_key, 0, false, false, std::string(public_key + 20, public_len-20));
 			
 	key_desc_t desc[] =
 	{
@@ -602,28 +548,29 @@ int test_main()
 	{
 		TEST_EQUAL(parsed[4]->string_value(), "r");
 		token = parsed[2]->string_value();
-		fprintf(stderr, "got token: %s\n", token.c_str());
 	}
 	else
 	{
-		fprintf(stderr, "msg: %s\n", print_entry(response).c_str());
 		fprintf(stderr, "   invalid get response: %s\n%s\n"
 			, error_string, print_entry(response).c_str());
 		TEST_ERROR(error_string);
 	}
 
-	unsigned char signature[64];
-	char buffer[1200];
+	char signature[256];
+	int sig_len = sizeof(signature);
+	char buffer[1024];
 	int seq = 4;
 	int pos = snprintf(buffer, sizeof(buffer), "3:seqi%de1:v", seq);
-	char* ptr = buffer + pos;
-	pos += bencode(ptr, items[0].ent);
-	ed25519_sign(signature, (unsigned char*)buffer, pos, private_key, public_key);
+	hasher h(buffer, pos);
+	char* ptr = buffer;
+	int len = bencode(ptr, items[0].ent);
+	h.update(buffer, len);
+	sign_rsa(h.final(), private_key, private_len, signature, sig_len);
 
 	send_dht_msg(node, "put", source, &response, "10", 0
 		, 0, token, 0, 0, &items[0].ent, false, false
-		, std::string((char*)public_key, 32)
-		, std::string((char*)signature, 64), seq);
+		, std::string(public_key, public_len)
+		, std::string(signature, sig_len), seq);
 
 	key_desc_t desc2[] =
 	{
@@ -643,11 +590,11 @@ int test_main()
 			, error_string, print_entry(response).c_str());
 		TEST_ERROR(error_string);
 	}
+#endif // TORRENT_USE_OPENSSL
 
 // test routing table
 
 	{
-		sett.extended_routing_table = false;
 		routing_table tbl(random_id(), 8, sett);
    
 		// insert 256 nodes evenly distributed across the ID space.
@@ -656,7 +603,7 @@ int test_main()
 		{
 			node_id id = random_id();
 			id[0] = i;
-			tbl.node_seen(id, rand_ep(), 50);
+			tbl.node_seen(id, rand_ep());
 		}
 		TEST_EQUAL(tbl.num_active_buckets(), 6);
    
@@ -665,343 +612,6 @@ int test_main()
 #endif
 	}
 
-	{
-		sett.extended_routing_table = true;
-		routing_table tbl(random_id(), 8, sett);
-		for (int i = 0; i < 256; ++i)
-		{
-			node_id id = random_id();
-			id[0] = i;
-			tbl.node_seen(id, rand_ep(), 50);
-		}
-		TEST_EQUAL(tbl.num_active_buckets(), 6);
-
-#if defined TORRENT_DHT_VERBOSE_LOGGING || defined TORRENT_DEBUG
-		tbl.print_state(std::cerr);
-#endif
-	}
-
-	// test verify_message
-	const static key_desc_t msg_desc[] = {
-		{"A", lazy_entry::string_t, 4, 0},
-		{"B", lazy_entry::dict_t, 0, key_desc_t::optional | key_desc_t::parse_children},
-			{"B1", lazy_entry::string_t, 0, 0},
-			{"B2", lazy_entry::string_t, 0, key_desc_t::last_child},
-		{"C", lazy_entry::dict_t, 0, key_desc_t::optional | key_desc_t::parse_children},
-			{"C1", lazy_entry::string_t, 0, 0},
-			{"C2", lazy_entry::string_t, 0, key_desc_t::last_child},
-	};
-
-	lazy_entry const* msg_keys[7];
-
-	lazy_entry ent;
-
-	error_code ec;
-	char const test_msg[] = "d1:A4:test1:Bd2:B15:test22:B25:test3ee";
-	lazy_bdecode(test_msg, test_msg + sizeof(test_msg)-1, ent, ec);
-	fprintf(stderr, "%s\n", print_entry(ent).c_str());
-
-	ret = verify_message(&ent, msg_desc, msg_keys, 7, error_string, sizeof(error_string));
-	TEST_CHECK(ret);
-	TEST_CHECK(msg_keys[0]);
-	if (msg_keys[0]) TEST_EQUAL(msg_keys[0]->string_value(), "test");
-	TEST_CHECK(msg_keys[1]);
-	TEST_CHECK(msg_keys[2]);
-	if (msg_keys[2]) TEST_EQUAL(msg_keys[2]->string_value(), "test2");
-	TEST_CHECK(msg_keys[3]);
-	if (msg_keys[3]) TEST_EQUAL(msg_keys[3]->string_value(), "test3");
-	TEST_CHECK(msg_keys[4] == 0);
-	TEST_CHECK(msg_keys[5] == 0);
-	TEST_CHECK(msg_keys[6] == 0);
-
-	char const test_msg2[] = "d1:A4:test1:Cd2:C15:test22:C25:test3ee";
-	lazy_bdecode(test_msg2, test_msg2 + sizeof(test_msg2)-1, ent, ec);
-	fprintf(stderr, "%s\n", print_entry(ent).c_str());
-
-	ret = verify_message(&ent, msg_desc, msg_keys, 7, error_string, sizeof(error_string));
-	TEST_CHECK(ret);
-	TEST_CHECK(msg_keys[0]);
-	if (msg_keys[0]) TEST_EQUAL(msg_keys[0]->string_value(), "test");
-	TEST_CHECK(msg_keys[1] == 0);
-	TEST_CHECK(msg_keys[2] == 0);
-	TEST_CHECK(msg_keys[3] == 0);
-	TEST_CHECK(msg_keys[4]);
-	TEST_CHECK(msg_keys[5]);
-	if (msg_keys[5]) TEST_EQUAL(msg_keys[5]->string_value(), "test2");
-	TEST_CHECK(msg_keys[6]);
-	if (msg_keys[6]) TEST_EQUAL(msg_keys[6]->string_value(), "test3");
-
-
-	char const test_msg3[] = "d1:Cd2:C15:test22:C25:test3ee";
-	lazy_bdecode(test_msg3, test_msg3 + sizeof(test_msg3)-1, ent, ec);
-	fprintf(stderr, "%s\n", print_entry(ent).c_str());
-
-	ret = verify_message(&ent, msg_desc, msg_keys, 7, error_string, sizeof(error_string));
-	TEST_CHECK(!ret);
-	fprintf(stderr, "%s\n", error_string);
-	TEST_EQUAL(error_string, std::string("missing 'A' key"));
-
-	char const test_msg4[] = "d1:A6:foobare";
-	lazy_bdecode(test_msg4, test_msg4 + sizeof(test_msg4)-1, ent, ec);
-	fprintf(stderr, "%s\n", print_entry(ent).c_str());
-
-	ret = verify_message(&ent, msg_desc, msg_keys, 7, error_string, sizeof(error_string));
-	TEST_CHECK(!ret);
-	fprintf(stderr, "%s\n", error_string);
-	TEST_EQUAL(error_string, std::string("invalid value for 'A'"));
-
-	char const test_msg5[] = "d1:A4:test1:Cd2:C15:test2ee";
-	lazy_bdecode(test_msg5, test_msg5 + sizeof(test_msg5)-1, ent, ec);
-	fprintf(stderr, "%s\n", print_entry(ent).c_str());
-
-	ret = verify_message(&ent, msg_desc, msg_keys, 7, error_string, sizeof(error_string));
-	TEST_CHECK(!ret);
-	fprintf(stderr, "%s\n", error_string);
-	TEST_EQUAL(error_string, std::string("missing 'C2' key"));
-
-	// test empty strings [ { "":1 }, "" ]
-	char const test_msg6[] = "ld0:i1ee0:e";
-	lazy_bdecode(test_msg6, test_msg6 + sizeof(test_msg6)-1, ent, ec);
-	fprintf(stderr, "%s\n", print_entry(ent).c_str());
-	TEST_CHECK(ent.type() == lazy_entry::list_t);
-	if (ent.type() == lazy_entry::list_t)
-	{
-		TEST_CHECK(ent.list_size() == 2);
-		if (ent.list_size() == 2)
-		{
-			TEST_CHECK(ent.list_at(0)->dict_find_int_value("") == 1);
-			TEST_CHECK(ent.list_at(1)->string_value() == "");
-		}
-	}
-
-	// test kademlia functions
-
-	using namespace libtorrent::dht;
-
-	for (int i = 0; i < 160; i += 8)
-	{
-		for (int j = 0; j < 160; j += 8)
-		{
-			node_id a(0);
-			a[(159-i) / 8] = 1 << (i & 7);
-			node_id b(0);
-			b[(159-j) / 8] = 1 << (j & 7);
-			int dist = distance_exp(a, b);
-
-			TEST_CHECK(dist >= 0 && dist < 160);
-			TEST_CHECK(dist == ((i == j)?0:(std::max)(i, j)));
-
-			for (int k = 0; k < 160; k += 8)
-			{
-				node_id c(0);
-				c[(159-k) / 8] = 1 << (k & 7);
-
-				bool cmp = compare_ref(a, b, c);
-				TEST_CHECK(cmp == (distance(a, c) < distance(b, c)));
-			}
-		}
-	}
-
-	{
-		// test kademlia routing table
-		dht_settings s;
-		//	s.restrict_routing_ips = false;
-		node_id id = to_hash("3123456789abcdef01232456789abcdef0123456");
-		dht::routing_table table(id, 10, s);
-		std::vector<node_entry> nodes;
-		TEST_EQUAL(table.size().get<0>(), 0);
-
-		node_id tmp = id;
-		node_id diff = to_hash("15764f7459456a9453f8719b09547c11d5f34061");
-
-		// test a node with the same IP:port changing ID
-		add_and_replace(tmp, diff);
-		table.node_seen(tmp, udp::endpoint(address::from_string("4.4.4.4"), 4), 10);
-		table.find_node(id, nodes, 0, 10);
-		TEST_EQUAL(table.bucket_size(0), 1);
-		TEST_EQUAL(table.size().get<0>(), 1);
-		TEST_EQUAL(nodes.size(), 1);
-		if (!nodes.empty())
-		{
-			TEST_EQUAL(nodes[0].id, tmp);
-			TEST_EQUAL(nodes[0].addr(), address_v4::from_string("4.4.4.4"));
-			TEST_EQUAL(nodes[0].port(), 4);
-			TEST_EQUAL(nodes[0].timeout_count, 0);
-		}
-
-		// set timeout_count to 1
-		table.node_failed(tmp, udp::endpoint(address_v4::from_string("4.4.4.4"), 4));
-
-		nodes.clear();
-		table.for_each_node(node_push_back, nop, &nodes);
-		TEST_EQUAL(nodes.size(), 1);
-		if (!nodes.empty())
-		{
-			TEST_EQUAL(nodes[0].id, tmp);
-			TEST_EQUAL(nodes[0].addr(), address_v4::from_string("4.4.4.4"));
-			TEST_EQUAL(nodes[0].port(), 4);
-			TEST_EQUAL(nodes[0].timeout_count, 1);
-		}
-
-		// add the exact same node again, it should set the timeout_count to 0
-		table.node_seen(tmp, udp::endpoint(address::from_string("4.4.4.4"), 4), 10);
-		nodes.clear();
-		table.for_each_node(node_push_back, nop, &nodes);
-		TEST_EQUAL(nodes.size(), 1);
-		if (!nodes.empty())
-		{
-			TEST_EQUAL(nodes[0].id, tmp);
-			TEST_EQUAL(nodes[0].addr(), address_v4::from_string("4.4.4.4"));
-			TEST_EQUAL(nodes[0].port(), 4);
-			TEST_EQUAL(nodes[0].timeout_count, 0);
-		}
-
-		// test adding the same IP:port again with a new node ID (should replace the old one)
-		add_and_replace(tmp, diff);
-		table.node_seen(tmp, udp::endpoint(address::from_string("4.4.4.4"), 4), 10);
-		table.find_node(id, nodes, 0, 10);
-		TEST_EQUAL(table.bucket_size(0), 1);
-		TEST_EQUAL(nodes.size(), 1);
-		if (!nodes.empty())
-		{
-			TEST_EQUAL(nodes[0].id, tmp);
-			TEST_EQUAL(nodes[0].addr(), address_v4::from_string("4.4.4.4"));
-			TEST_EQUAL(nodes[0].port(), 4);
-		}
-
-		// test adding the same node ID again with a different IP (should be ignored)
-		table.node_seen(tmp, udp::endpoint(address::from_string("4.4.4.4"), 5), 10);
-		table.find_node(id, nodes, 0, 10);
-		TEST_EQUAL(table.bucket_size(0), 1);
-		if (!nodes.empty())
-		{
-			TEST_EQUAL(nodes[0].id, tmp);
-			TEST_EQUAL(nodes[0].addr(), address_v4::from_string("4.4.4.4"));
-			TEST_EQUAL(nodes[0].port(), 4);
-		}
-
-		// test adding a node that ends up in the same bucket with an IP
-		// very close to the current one (should be ignored)
-		// if restrict_routing_ips == true
-		table.node_seen(tmp, udp::endpoint(address::from_string("4.4.4.5"), 5), 10);
-		table.find_node(id, nodes, 0, 10);
-		TEST_EQUAL(table.bucket_size(0), 1);
-		if (!nodes.empty())
-		{
-			TEST_EQUAL(nodes[0].id, tmp);
-			TEST_EQUAL(nodes[0].addr(), address_v4::from_string("4.4.4.4"));
-			TEST_EQUAL(nodes[0].port(), 4);
-		}
-
-		s.restrict_routing_ips = false;
-
-		add_and_replace(tmp, diff);
-		table.node_seen(id, udp::endpoint(rand_v4(), rand()), 10);
-
-		nodes.clear();
-		for (int i = 0; i < 7000; ++i)
-		{
-			table.node_seen(tmp, udp::endpoint(rand_v4(), rand()), 10);
-			add_and_replace(tmp, diff);
-		}
-		TEST_EQUAL(table.num_active_buckets(), 11);
-		TEST_CHECK(table.size().get<0>() > 10 * 10);
-		//#error test num_global_nodes
-		//#error test need_refresh
-
-#if defined TORRENT_DHT_VERBOSE_LOGGING || defined TORRENT_DEBUG
-		table.print_state(std::cerr);
-#endif
-
-		table.for_each_node(node_push_back, nop, &nodes);
-
-		std::cout << "nodes: " << nodes.size() << std::endl;
-
-		std::vector<node_entry> temp;
-
-		std::generate(tmp.begin(), tmp.end(), &std::rand);
-		table.find_node(tmp, temp, 0, nodes.size() * 2);
-		std::cout << "returned: " << temp.size() << std::endl;
-		TEST_EQUAL(temp.size(), nodes.size());
-
-		std::generate(tmp.begin(), tmp.end(), &std::rand);
-		table.find_node(tmp, temp, 0, 7);
-		std::cout << "returned: " << temp.size() << std::endl;
-		TEST_EQUAL(temp.size(), 7);
-
-		std::sort(nodes.begin(), nodes.end(), boost::bind(&compare_ref
-				, boost::bind(&node_entry::id, _1)
-				, boost::bind(&node_entry::id, _2), tmp));
-
-		int hits = 0;
-		// This makes sure enough of the nodes returned are actually
-		// part of the closest nodes
-		for (std::vector<node_entry>::iterator i = temp.begin()
-			, end(temp.end()); i != end; ++i)
-		{
-			int hit = std::find_if(nodes.begin(), nodes.end()
-				, boost::bind(&node_entry::id, _1) == i->id) - nodes.begin();
-			//		std::cerr << hit << std::endl;
-			if (hit < int(temp.size())) ++hits;
-		}
-		std::cout << "hits: " << hits << std::endl;
-		TEST_CHECK(hits == int(temp.size()));
-
-		std::generate(tmp.begin(), tmp.end(), &std::rand);
-		table.find_node(tmp, temp, 0, 15);
-		std::cout << "returned: " << temp.size() << std::endl;
-		TEST_EQUAL(int(temp.size()), (std::min)(15, int(nodes.size())));
-
-		std::sort(nodes.begin(), nodes.end(), boost::bind(&compare_ref
-				, boost::bind(&node_entry::id, _1)
-				, boost::bind(&node_entry::id, _2), tmp));
-
-		hits = 0;
-		// This makes sure enough of the nodes returned are actually
-		// part of the closest nodes
-		for (std::vector<node_entry>::iterator i = temp.begin()
-			, end(temp.end()); i != end; ++i)
-		{
-			int hit = std::find_if(nodes.begin(), nodes.end()
-				, boost::bind(&node_entry::id, _1) == i->id) - nodes.begin();
-			//		std::cerr << hit << std::endl;
-			if (hit < int(temp.size())) ++hits;
-		}
-		std::cout << "hits: " << hits << std::endl;
-		TEST_CHECK(hits == int(temp.size()));
-
-		using namespace libtorrent::dht;
-
-		char const* ips[] = {
-			"124.31.75.21",
-			"21.75.31.124",
-			"65.23.51.170",
-			"84.124.73.14",
-			"43.213.53.83",
-		};
-
-		int rs[] = { 1,86,22,65,90 };
-
-		boost::uint8_t prefixes[][4] =
-		{
-			{ 0x17, 0x12, 0xf6, 0xc7 },
-			{ 0x94, 0x64, 0x06, 0xc1 },
-			{ 0xfe, 0xfd, 0x92, 0x20 },
-			{ 0xaf, 0x15, 0x46, 0xdd },
-			{ 0xa9, 0xe9, 0x20, 0xbf }
-		};
-
-		for (int i = 0; i < 5; ++i)
-		{
-			address a = address_v4::from_string(ips[i]);
-			node_id id = generate_id_impl(a, rs[i]);
-			for (int j = 0; j < 4; ++j)
-				TEST_CHECK(id[j] == prefixes[i][j]);
-			TEST_CHECK(id[19] == rs[i]);
-			fprintf(stderr, "IP address: %s r: %d node ID: %s\n", ips[i]
-				, rs[i], to_hex(id.to_string()).c_str());
-		}
-	}
 	return 0;
 }
 

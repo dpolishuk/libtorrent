@@ -86,6 +86,7 @@ namespace
         ti.set_merkle_tree(h);
     }
 
+
 #ifndef TORRENT_NO_DEPRECATE
     file_storage::iterator begin_files(torrent_info& i)
     {
@@ -109,7 +110,9 @@ namespace
     list files(torrent_info const& ti, bool storage) {
         list result;
 
-        for (int i = 0; i < ti.num_files(); ++i)
+        typedef torrent_info::file_iterator iter;
+
+        for (iter i = ti.begin_files(); i != ti.end_files(); ++i)
             result.append(ti.files().at(i));
 
         return result;
@@ -134,10 +137,6 @@ namespace
     std::string metadata(torrent_info const& ti) {
         std::string result(ti.metadata().get(), ti.metadata_size());
         return result;
-    }
-
-    torrent_info construct0(std::string path) {
-        return torrent_info(path);
     }
 
     list map_block(torrent_info& ti, int piece, size_type offset, int size)
@@ -214,10 +213,7 @@ void bind_torrent_info()
         .def("total_size", &torrent_info::total_size)
         .def("piece_length", &torrent_info::piece_length)
         .def("num_pieces", &torrent_info::num_pieces)
-#ifndef TORRENT_NO_DEPRECATE
         .def("info_hash", &torrent_info::info_hash, copy)
-        .def("file_at_offset", &torrent_info::file_at_offset)
-#endif
         .def("hash_for_piece", &hash_for_piece)
         .def("merkle_tree", get_merkle_tree)
         .def("set_merkle_tree", set_merkle_tree)
@@ -225,6 +221,7 @@ void bind_torrent_info()
 
         .def("num_files", &torrent_info::num_files, (arg("storage")=false))
         .def("file_at", &torrent_info::file_at)
+        .def("file_at_offset", &torrent_info::file_at_offset)
         .def("files", &files, (arg("storage")=false))
         .def("orig_files", &orig_files, (arg("storage")=false))
         .def("rename_file", rename_file0)
@@ -285,7 +282,9 @@ void bind_torrent_info()
         .value("source_tex", announce_entry::source_tex)
     ;
 
+#if BOOST_VERSION > 104200
     implicitly_convertible<boost::intrusive_ptr<torrent_info>, boost::intrusive_ptr<const torrent_info> >();
     boost::python::register_ptr_to_python<boost::intrusive_ptr<const torrent_info> >();
+#endif
 }
 

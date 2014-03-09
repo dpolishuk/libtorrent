@@ -72,12 +72,6 @@ void test_transfer(libtorrent::pe_settings::enc_policy policy,
 {
 	using namespace libtorrent;
 
-	// these are declared before the session objects
-	// so that they are destructed last. This enables
-	// the sessions to destruct in parallel
-	session_proxy p1;
-	session_proxy p2;
-
 	session ses1(fingerprint("LT", 0, 1, 0, 0), std::make_pair(48800, 49000), "0.0.0.0", 0);
 	session ses2(fingerprint("LT", 0, 1, 0, 0), std::make_pair(49800, 50000), "0.0.0.0", 0);
 	pe_settings s;
@@ -125,10 +119,6 @@ void test_transfer(libtorrent::pe_settings::enc_policy policy,
 	ses1.remove_torrent(tor1);
 	ses2.remove_torrent(tor2);
 
-	// this allows shutting down the sessions in parallel
-	p1 = ses1.abort();
-	p2 = ses2.abort();
-
 	error_code ec;
 	remove_all("tmp1_pe", ec);
 	remove_all("tmp2_pe", ec);
@@ -162,13 +152,9 @@ void test_enc_handler(libtorrent::encryption_handler* a, libtorrent::encryption_
 	}
 }
 
-#endif
-
 int test_main()
 {
 	using namespace libtorrent;
-
-#ifndef TORRENT_DISABLE_ENCRYPTION
 	int repcount = 128;
 
 	for (int rep = 0; rep < repcount; ++rep)
@@ -210,36 +196,17 @@ int test_main()
 	test_transfer(pe_settings::enabled, pe_settings::rc4);
 	test_transfer(pe_settings::enabled, pe_settings::both, false);
 	test_transfer(pe_settings::enabled, pe_settings::both, true);
-#else
-	fprintf(stderr, "PE test not run because it's disabled\n");
-#endif
-
-#if defined TORRENT_USE_OPENSSL
-	// test sign_rsa and verify_rsa
-	char private_key[1192];
-	int private_len = sizeof(private_key);
-	char public_key[268];
-	int public_len = sizeof(public_key);
-
-	ret = generate_rsa_keys(public_key, &public_len, private_key, &private_len, 2048);
-	fprintf(stderr, "keysizes: pub: %d priv: %d\n", public_len, private_len);
-
-	TEST_CHECK(ret);
-
-	char test_message[1024];
-	std::generate(test_message, test_message + 1024, &std::rand);
-
-	char signature[256];
-	int sig_len = sign_rsa(hasher(test_message, sizeof(test_message)).final()
-		, private_key, private_len, signature, sizeof(signature));
-
-	TEST_CHECK(sig_len == 256);
-
-	ret = verify_rsa(hasher(test_message, sizeof(test_message)).final()
-		, public_key, public_len, signature, sig_len);
-	TEST_CHECK(ret == 1);
-#endif
 
 	return 0;
 }
+
+#else
+
+int test_main()
+{
+	fprintf(stderr, "PE test not run because it's disabled\n");
+	return 0;
+}
+
+#endif
 

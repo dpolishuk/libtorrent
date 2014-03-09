@@ -18,7 +18,7 @@ std::string get_buffer(read_piece_alert const& rpa)
 
 tuple endpoint_to_tuple(tcp::endpoint const& ep)
 {
-    return make_tuple(ep.address().to_string(), ep.port());
+    return boost::python::make_tuple(ep.address().to_string(), ep.port());
 }
 
 tuple peer_alert_ip(peer_alert const& pa)
@@ -41,6 +41,11 @@ std::string dht_announce_alert_ip(dht_announce_alert const& pa)
 tuple incoming_connection_alert_ip(incoming_connection_alert const& ica)
 {
     return endpoint_to_tuple(ica.ip);
+}
+
+std::string external_ip_alert_ip(external_ip_alert const& eia)
+{
+    return eia.external_address.to_string();
 }
 
 list stats_alert_transferred(stats_alert const& alert)
@@ -351,7 +356,7 @@ void bind_alert()
 
     class_<external_ip_alert, bases<alert>, noncopyable>(
         "external_ip_alert", no_init)
-        .def_readonly("external_address", &external_ip_alert::external_address)
+        .add_property("external_address", &external_ip_alert_ip)
         ;
 
     class_<save_resume_data_alert, bases<torrent_alert>, noncopyable>(
@@ -524,10 +529,4 @@ void bind_alert()
        .def_readonly("error", &add_torrent_alert::error)
        .add_property("params", &get_params)
        ;
-
-    class_<torrent_update_alert, bases<torrent_alert>, noncopyable>(
-       "torrent_update_alert", no_init)
-        .def_readonly("old_ih", &torrent_update_alert::old_ih)
-        .def_readonly("new_ih", &torrent_update_alert::new_ih)
-        ;
 }

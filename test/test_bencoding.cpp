@@ -110,7 +110,9 @@ int test_main()
 		error_code ec;
 		int ret = lazy_bdecode(b, b + sizeof(b)-1, e, ec);
 		TORRENT_ASSERT(ret == 0);
-		printf("%s\n", print_entry(e).c_str());
+#if TORRENT_USE_IOSTREAM
+		std::cout << e << std::endl;
+#endif
 		std::pair<const char*, int> section = e.data_section();
 		TORRENT_ASSERT(std::memcmp(b, section.first, section.second) == 0);
 		TORRENT_ASSERT(section.second == sizeof(b) - 1);
@@ -124,7 +126,9 @@ int test_main()
 		error_code ec;
 		int ret = lazy_bdecode(b, b + sizeof(b)-1, e, ec);
 		TORRENT_ASSERT(ret == 0);
-		printf("%s\n", print_entry(e).c_str());
+#if TORRENT_USE_IOSTREAM
+		std::cout << e << std::endl;
+#endif
 		std::pair<const char*, int> section = e.data_section();
 		TORRENT_ASSERT(std::memcmp(b, section.first, section.second) == 0);
 		TORRENT_ASSERT(section.second == sizeof(b) - 1);
@@ -139,7 +143,9 @@ int test_main()
 		error_code ec;
 		int ret = lazy_bdecode(b, b + sizeof(b)-1, e, ec);
 		TORRENT_ASSERT(ret == 0);
-		printf("%s\n", print_entry(e).c_str());
+#if TORRENT_USE_IOSTREAM
+		std::cout << e << std::endl;
+#endif
 		std::pair<const char*, int> section = e.data_section();
 		TORRENT_ASSERT(std::memcmp(b, section.first, section.second) == 0);
 		TORRENT_ASSERT(section.second == sizeof(b) - 1);
@@ -161,7 +167,9 @@ int test_main()
 		error_code ec;
 		int ret = lazy_bdecode(b, b + sizeof(b)-1, e, ec);
 		TORRENT_ASSERT(ret == 0);
-		printf("%s\n", print_entry(e).c_str());
+#if TORRENT_USE_IOSTREAM
+		std::cout << e << std::endl;
+#endif
 		std::pair<const char*, int> section = e.data_section();
 		TORRENT_ASSERT(std::memcmp(b, section.first, section.second) == 0);
 		TORRENT_ASSERT(section.second == sizeof(b) - 1);
@@ -180,7 +188,7 @@ int test_main()
 
 	// test invalid encoding
 	{
-		char buf[] =
+		unsigned char buf[] =
 			{ 0x64	, 0x31	, 0x3a	, 0x61	, 0x64	, 0x32	, 0x3a	, 0x69
 			, 0x64	, 0x32	, 0x30	, 0x3a	, 0x2a	, 0x21	, 0x19	, 0x89
 			, 0x9f	, 0xcd	, 0x5f	, 0xc9	, 0xbc	, 0x80	, 0xc1	, 0x76
@@ -198,9 +206,16 @@ int test_main()
 		printf("%s\n", buf);
 		lazy_entry e;
 		error_code ec;
-		int ret = lazy_bdecode(buf, buf + sizeof(buf), e, ec);
+		int ret = lazy_bdecode((char*)buf, (char*)buf + sizeof(buf), e, ec);
 		TEST_CHECK(ret == -1);	
 	}
+
+	{
+		unsigned char buf[] = { 0x44	, 0x91	, 0x3a };
+		entry ent = bdecode(buf, buf + sizeof(buf));
+		TEST_CHECK(ent == entry());
+	}
+
 	return 0;
 }
 

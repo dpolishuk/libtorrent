@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2006-2012, Arvid Norberg
+Copyright (c) 2006, Arvid Norberg
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -33,10 +33,12 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "libtorrent/pch.hpp"
 #include "libtorrent/socket.hpp"
 
+// TODO: it would be nice to not have this dependency here
+#include "libtorrent/aux_/session_impl.hpp"
+
 #include <boost/bind.hpp>
 
 #include <libtorrent/io.hpp>
-#include <libtorrent/random.hpp>
 #include <libtorrent/invariant_check.hpp>
 #include <libtorrent/kademlia/node_id.hpp> // for generate_random_id
 #include <libtorrent/kademlia/rpc_manager.hpp>
@@ -46,7 +48,6 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <libtorrent/kademlia/refresh.hpp>
 #include <libtorrent/kademlia/node.hpp>
 #include <libtorrent/kademlia/observer.hpp>
-#include <libtorrent/kademlia/dht_observer.hpp>
 #include <libtorrent/hasher.hpp>
 #include <libtorrent/time.hpp>
 #include <time.h> // time()
@@ -159,17 +160,17 @@ enum { observer_size = max3<
 };
 
 rpc_manager::rpc_manager(node_id const& our_id
-	, routing_table& table, udp_socket_interface* sock
-	, dht_observer* observer)
+	, routing_table& table, send_fun const& sf
+	, void* userdata)
 	: m_pool_allocator(observer_size, 10)
-	, m_sock(sock)
+	, m_send(sf)
+	, m_userdata(userdata)
 	, m_our_id(our_id)
 	, m_table(table)
 	, m_timer(time_now())
 	, m_random_number(generate_random_id())
 	, m_allocated_observers(0)
 	, m_destructing(false)
-	, m_observer(observer)
 {
 	std::srand(time(0));
 
@@ -179,14 +180,14 @@ rpc_manager::rpc_manager(node_id const& our_id
 #define PRINT_OFFSETOF(x, y) TORRENT_LOG(rpc) << "  +" << offsetof(x, y) << ": " #y
 
 	TORRENT_LOG(rpc) << " observer: " << sizeof(observer);
-	PRINT_OFFSETOF(dht::observer, m_sent);
-	PRINT_OFFSETOF(dht::observer, m_refs);
-	PRINT_OFFSETOF(dht::observer, m_algorithm);
-	PRINT_OFFSETOF(dht::observer, m_id);
-	PRINT_OFFSETOF(dht::observer, m_addr);
-	PRINT_OFFSETOF(dht::observer, m_port);
-	PRINT_OFFSETOF(dht::observer, m_transaction_id);
-	PRINT_OFFSETOF(dht::observer, flags);
+	PRINT_OFFSETOF(observer, m_sent);
+	PRINT_OFFSETOF(observer, m_refs);
+	PRINT_OFFSETOF(observer, m_algorithm);
+	PRINT_OFFSETOF(observer, m_id);
+	PRINT_OFFSETOF(observer, m_addr);
+	PRINT_OFFSETOF(observer, m_port);
+	PRINT_OFFSETOF(observer, m_transaction_id);
+	PRINT_OFFSETOF(observer, flags);
 
 	TORRENT_LOG(rpc) << " announce_observer: " << sizeof(announce_observer);
 	TORRENT_LOG(rpc) << " null_observer: " << sizeof(null_observer);
@@ -224,7 +225,6 @@ void rpc_manager::free_observer(void* ptr)
 {
 	if (!ptr) return;
 	--m_allocated_observers;
-	TORRENT_ASSERT(reinterpret_cast<observer*>(ptr)->m_in_use == false);
 	m_pool_allocator.free(ptr);
 }
 
@@ -303,62 +303,40 @@ bool rpc_manager::incoming(msg const& m, node_id* id)
 	if (!o)
 	{
 #ifdef TORRENT_DHT_VERBOSE_LOGGING
-		TORRENT_LOG(rpc) << "Reply with invalid transaction id size: " 
+		TORRENT_LOG(rpc) << "Reply with unknown transaction id size: " 
 			<< transaction_id.size() << " from " << m.addr;
 #endif
-		entry e;
-		incoming_error(e, "invalid transaction id");
-		m_sock->send_packet(e, m.addr, 0);
+//		entry e;
+//		incoming_error(e, "invalid transaction id");
+//		m_send(m_userdata, e, m.addr, 0);
 		return false;
 	}
 
-	ptime now = time_now_hires();
-
 #ifdef TORRENT_DHT_VERBOSE_LOGGING
 	std::ofstream reply_stats("round_trip_ms.log", std::ios::app);
-	reply_stats << m.addr << "\t" << total_milliseconds(now - o->sent())
+	reply_stats << m.addr << "\t" << total_milliseconds(time_now_hires() - o->sent())
 		<< std::endl;
 #endif
 
 	lazy_entry const* ret_ent = m.message.dict_find_dict("r");
 	if (ret_ent == 0)
 	{
+		o->timeout();
 		entry e;
 		incoming_error(e, "missing 'r' key");
-		m_sock->send_packet(e, m.addr, 0);
+		m_send(m_userdata, e, m.addr, 0);
 		return false;
 	}
 
 	lazy_entry const* node_id_ent = ret_ent->dict_find_string("id");
 	if (node_id_ent == 0 || node_id_ent->string_length() != 20)
 	{
+		o->timeout();
 		entry e;
 		incoming_error(e, "missing 'id' key");
-		m_sock->send_packet(e, m.addr, 0);
+		m_send(m_userdata, e, m.addr, 0);
 		return false;
 	}
-
-	lazy_entry const* ext_ip = ret_ent->dict_find_string("ip");
-	if (ext_ip && ext_ip->string_length() == 4)
-	{
-		// this node claims we use the wrong node-ID!
-		address_v4::bytes_type b;
-		memcpy(&b[0], ext_ip->string_ptr(), 4);
-		if (m_observer)
-			m_observer->set_external_address(address_v4(b)
-				, m.addr.address());
-	}
-#if TORRENT_USE_IPV6
-	else if (ext_ip && ext_ip->string_length() == 16)
-	{
-		// this node claims we use the wrong node-ID!
-		address_v6::bytes_type b;
-		memcpy(&b[0], ext_ip->string_ptr(), 16);
-		if (m_observer)
-			m_observer->set_external_address(address_v6(b)
-				, m.addr.address());
-	}
-#endif
 
 #ifdef TORRENT_DHT_VERBOSE_LOGGING
 	TORRENT_LOG(rpc) << "[" << o->m_algorithm.get() << "] Reply with transaction id: " 
@@ -367,11 +345,9 @@ bool rpc_manager::incoming(msg const& m, node_id* id)
 	o->reply(m);
 	*id = node_id(node_id_ent->string_ptr());
 
-	int rtt = total_milliseconds(now - o->sent());
-
 	// we found an observer for this reply, hence the node is not spoofing
 	// add it to the routing table
-	return m_table.node_seen(*id, m.addr, rtt);
+	return m_table.node_seen(*id, m.addr);
 }
 
 time_duration rpc_manager::tick()
@@ -441,10 +417,10 @@ time_duration rpc_manager::tick()
 			break;
 		}
 		
-		// don't call short_timeout() again if we've
-		// already called it once
 		if (o->has_short_timeout()) continue;
 
+		// TODO: don't call short_timeout() again if we've
+		// already called it once
 		timeouts.push_back(o);
 	}
 
@@ -472,7 +448,7 @@ bool rpc_manager::invoke(entry& e, udp::endpoint target_addr
 	std::string transaction_id;
 	transaction_id.resize(2);
 	char* out = &transaction_id[0];
-	int tid = random() ^ (random() << 5);
+	int tid = rand() ^ (rand() << 5);
 	io::write_uint16(tid, out);
 	e["t"] = transaction_id;
 		
@@ -484,7 +460,7 @@ bool rpc_manager::invoke(entry& e, udp::endpoint target_addr
 		<< e["q"].string() << " -> " << target_addr;
 #endif
 
-	if (m_sock->send_packet(e, target_addr, 1))
+	if (m_send(m_userdata, e, target_addr, 1))
 	{
 		m_transactions.push_back(o);
 #if defined TORRENT_DEBUG || TORRENT_RELEASE_ASSERTS
@@ -503,10 +479,6 @@ observer::~observer()
 	// reported back
 	TORRENT_ASSERT(m_was_sent == bool(flags & flag_done) || m_was_abandoned);
 	TORRENT_ASSERT(!m_in_constructor);
-#if defined TORRENT_DEBUG || TORRENT_RELEASE_ASSERTS
-	TORRENT_ASSERT(m_in_use);
-	m_in_use = false;
-#endif
 }
 
 } } // namespace libtorrent::dht

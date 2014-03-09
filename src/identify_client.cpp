@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2003-2012, Arvid Norberg
+Copyright (c) 2003, Arvid Norberg
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -271,11 +271,13 @@ namespace
 		, {0, "-G3", "G3 Torrent"}
 		, {0, "-FG", "FlashGet"}
 		, {0, "-ML", "MLdonkey"}
+		, {0, "-MG", "Media Get"}
 		, {0, "XBT", "XBT"}
 		, {0, "OP", "Opera"}
 		, {2, "RS", "Rufus"}
 		, {0, "AZ2500BT", "BitTyrant"}
-		, {0, "btpd/", "BitTorrent Protocol Daemon"}
+		, {0, "TIX", "Tixati"}
+		, {0, "QVOD", "Qvod"}
 	};
 
 	bool compare_id(map_entry const& lhs, map_entry const& rhs)

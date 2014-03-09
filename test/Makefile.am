@@ -1,5 +1,5 @@
 test_programs = \
-  test_file                  \
+  test_privacy               \
   test_file_storage          \
   test_auto_unchoke          \
   test_bandwidth_limiter     \
@@ -14,30 +14,24 @@ test_programs = \
   test_dht                   \
   test_lsd                   \
   test_metadata_extension    \
-  test_natpmp                \
   test_pe_crypto             \
-  test_peer_priority         \
   test_pex                   \
   test_piece_picker          \
-  test_xml                   \
-  test_string                \
   test_primitives            \
-  test_http_parser           \
-  test_magnet                \
-  test_packet_buffer         \
+  test_read_piece            \
   test_rss                   \
+  test_ssl                   \
   test_storage               \
   test_swarm                 \
   test_threads               \
   test_torrent               \
   test_torrent_parse         \
+  test_tracker               \
   test_trackers_extension    \
   test_transfer              \
   test_upnp                  \
-  enum_if                    \
   test_utp                   \
   test_session               \
-  test_ssl                   \
   test_web_seed
 
 if ENABLE_TESTS
@@ -79,15 +73,8 @@ EXTRA_DIST = Jamfile \
   test_torrents/invalid_pieces.torrent \
   test_torrents/unaligned_pieces.torrent \
   test_torrents/creation_date.torrent \
-  test_torrents/no_creation_date.torrent \
-  test_torrents/url_seed.torrent \
-  test_torrents/url_seed_multi.torrent \
-  test_torrents/url_seed_multi_space.torrent \
-  test_torrents/url_seed_multi_space_nolist.torrent \
-  test_torrents/invalid_root_hash.torrent \
-  test_torrents/invalid_root_hash2.torrent \
-  test_torrents/root_hash.torrent \
-  test_torrents/invalid_file_size.torrent \
+  test_torrents/empty_path_multi.torrent \
+  test_torrents/duplicate_web_seeds.torrent \
   eztv.xml \
   kat.xml \
   cb.xml \
@@ -99,22 +86,9 @@ EXTRA_PROGRAMS = $(test_programs)
 
 noinst_HEADERS = test.hpp setup_transfer.hpp
 
-libtest_la_SOURCES = main.cpp \
-  setup_transfer.cpp \
-  dht_server.cpp \
-  peer_server.cpp \
-  ../ed25519/src/add_scalar.c   \
-  ../ed25519/src/fe.c           \
-  ../ed25519/src/ge.c           \
-  ../ed25519/src/key_exchange.c \
-  ../ed25519/src/keypair.c      \
-  ../ed25519/src/sc.c           \
-  ../ed25519/src/seed.c         \
-  ../ed25519/src/sha512.c       \
-  ../ed25519/src/sign.c         \
-  ../ed25519/src/verify.c
+libtest_la_SOURCES = main.cpp setup_transfer.cpp dht_server.cpp peer_server.cpp
 
-test_file_SOURCES = test_file.cpp
+test_privacy_SOURCES = test_privacy.cpp
 test_file_storage_SOURCES = test_file_storage.cpp
 test_auto_unchoke_SOURCES = test_auto_unchoke.cpp
 test_bandwidth_limiter_SOURCES = test_bandwidth_limiter.cpp
@@ -129,25 +103,24 @@ test_http_connection_SOURCES = test_http_connection.cpp
 test_ip_filter_SOURCES = test_ip_filter.cpp
 test_lsd_SOURCES = test_lsd.cpp
 test_metadata_extension_SOURCES = test_metadata_extension.cpp
-test_natpmp_SOURCES = test_natpmp.cpp
-test_peer_priority_SOURCES = test_peer_priority.cpp
 test_pe_crypto_SOURCES = test_pe_crypto.cpp
 test_pex_SOURCES = test_pex.cpp
 test_piece_picker_SOURCES = test_piece_picker.cpp
 test_primitives_SOURCES = test_primitives.cpp
+test_read_piece_SOURCES = test_read_piece.cpp
 test_storage_SOURCES = test_storage.cpp
 test_swarm_SOURCES = test_swarm.cpp
 test_rss_SOURCES = test_rss.cpp
+test_ssl_SOURCES = test_ssl.cpp
 test_threads_SOURCES = test_threads.cpp
 test_torrent_SOURCES = test_torrent.cpp
 test_torrent_parse_SOURCES = test_torrent_parse.cpp
+test_tracker_SOURCES = test_tracker.cpp
 test_trackers_extension_SOURCES = test_trackers_extension.cpp
 test_transfer_SOURCES = test_transfer.cpp
 test_upnp_SOURCES = test_upnp.cpp
-enum_if_SOURCES = enum_if.cpp
 test_utp_SOURCES = test_utp.cpp
 test_session_SOURCES = test_session.cpp
-test_ssl_SOURCES = test_ssl.cpp
 test_web_seed_SOURCES = test_web_seed.cpp
 
 LDADD = $(top_builddir)/src/libtorrent-rasterbar.la libtest.la
@@ -156,4 +129,3 @@ LDADD = $(top_builddir)/src/libtorrent-rasterbar.la libtest.la
 AM_CPPFLAGS=-ftemplate-depth-50 -I$(top_srcdir)/include @DEBUGFLAGS@
 
 #AM_LDFLAGS= @BOOST_SYSTEM_LIB@ @BOOST_FILESYSTEM_LIB@ @BOOST_THREAD_LIB@ @PTHREAD_LIBS@ @SSL_LDFLAGS@ @SSL_LIBS@
-

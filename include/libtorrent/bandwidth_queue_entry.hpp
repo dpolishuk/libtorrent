@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2007-2012, Arvid Norberg
+Copyright (c) 2007, Arvid Norberg
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -62,7 +62,8 @@ struct TORRENT_EXTRA_EXPORT bw_request
 	// from the most limiting one
 	int assign_bandwidth();
 
-	bandwidth_channel* channel[5];
+	enum { max_bandwidth_channels = 5 };
+	bandwidth_channel* channel[max_bandwidth_channels];
 };
 
 }

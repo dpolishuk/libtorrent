@@ -1,7 +1,7 @@
 /*
 
-Copyright (c) 2003-2012, Arvid Norberg
-Copyright (c) 2007-2012, Arvid Norberg, Un Shyam
+Copyright (c) 2003 - 2006, Arvid Norberg
+Copyright (c) 2007, Arvid Norberg, Un Shyam
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -87,11 +87,19 @@ namespace libtorrent
 		// other end has the correct id
 		bt_peer_connection(
 			aux::session_impl& ses
+			, boost::weak_ptr<torrent> t
 			, boost::shared_ptr<socket_type> s
 			, tcp::endpoint const& remote
 			, policy::peer* peerinfo
-			, boost::weak_ptr<torrent> t = boost::weak_ptr<torrent>()
-			, bool outgoing = false);
+			, bool outgoing = true);
+
+		// with this constructor we have been contacted and we still don't
+		// know which torrent the connection belongs to
+		bt_peer_connection(
+			aux::session_impl& ses
+			, boost::shared_ptr<socket_type> s
+			, tcp::endpoint const& remote
+			, policy::peer* peerinfo);
 
 		void start();
 
@@ -249,7 +257,7 @@ namespace libtorrent
 		void on_connected();
 		void on_metadata();
 
-#if defined TORRENT_DEBUG && !defined TORRENT_DISABLE_INVARIANT_CHECKS
+#ifdef TORRENT_DEBUG
 		void check_invariant() const;
 		ptime m_last_choke;
 #endif
@@ -286,6 +294,13 @@ namespace libtorrent
 		// initializes m_enc_handler
 		void init_pe_rc4_handler(char const* secret, sha1_hash const& stream_key);
 
+		// Returns offset at which bytestream (src, src + src_size)
+		// matches bytestream(target, target + target_size).
+		// If no sync found, return -1
+		int get_syncoffset(char const* src, int src_size
+			, char const* target, int target_size) const;
+#endif
+
 public:
 
 		// these functions encrypt the send buffer if m_rc4_encrypted
@@ -295,7 +310,7 @@ public:
 		virtual void send_buffer(char const* begin, int size, int flags = 0
 			, void (*fun)(char*, int, void*) = 0, void* userdata = 0);
 		template <class Destructor>
-		void append_send_buffer(char* buffer, int size, Destructor const& destructor)
+		void bt_append_send_buffer(char* buffer, int size, Destructor const& destructor)
 		{
 #ifndef TORRENT_DISABLE_ENCRYPTION
 			if (m_rc4_encrypted)
@@ -305,13 +320,6 @@ public:
 		}
 
 private:
-
-		// Returns offset at which bytestream (src, src + src_size)
-		// matches bytestream(target, target + target_size).
-		// If no sync found, return -1
-		int get_syncoffset(char const* src, int src_size
-			, char const* target, int target_size) const;
-#endif
 
 		enum state
 		{

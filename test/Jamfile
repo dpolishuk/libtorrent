@@ -5,52 +5,35 @@ use-project /torrent : .. ;
 exe test_natpmp : test_natpmp.cpp /torrent//torrent
 	: <threading>multi <debug-iterators>on <invariant-checks>full ;
 
-exe enum_if : enum_if.cpp /torrent//torrent
-	: <threading>multi <debug-iterators>on <invariant-checks>full ;
-
 explicit test_natpmp ;
-explicit enum_if ;
 
-ED25519_SOURCES =
-	add_scalar
-	fe
-	ge
-	key_exchange
-	keypair
-	sc
-	seed
-	sha512
-	sign
-	verify
-	;
+rule libtorrent_dependency ( properties * )
+{
+	local result ;
 
-lib libtorrent_test
-	: # sources
-	setup_transfer.cpp
-	dht_server.cpp
-	peer_server.cpp
-	../ed25519/src/$(ED25519_SOURCES).c
+	if <toolset>msvc in $(properties)
+	{
+		# for some reason, the visual studio debugger seems
+		# to get very confused with the dynamic linking.
+		# since debugging unit tests is common, just link
+		# statically with msvc
+		result += <library>/torrent//torrent/<link>static/<boost-link>static/<export-extra>on ;
+	}
+	else
+	{
+		result += <library>/torrent//torrent/<link>shared/<boost-link>shared/<export-extra>on ;
+	}
 
-	: # requirements
-	<library>/torrent//torrent/<link>shared/<boost-link>shared/<export-extra>on
-	# this is used to determine whether
-	# symbols are exported or imported
-	<link>shared:<define>TORRENT_BUILDING_TEST_SHARED
-	<link>shared:<define>ED25519_BUILD_DLL
-	<include>../ed25519/src
-	<target-os>windows:<library>advapi32
-
-	: # default build
-	<link>shared
-;
-
-lib advapi32 : : <name>Advapi32 ;
+	return $(result) ;
+}
 
 project
    : requirements
+	<conditional>@libtorrent_dependency
 	<source>main.cpp
-	<library>/torrent//torrent/<link>shared/<boost-link>shared/<export-extra>on
-	<library>libtorrent_test/<link>shared
+	<source>setup_transfer.cpp
+	<source>dht_server.cpp
+	<source>peer_server.cpp
    : default-build
 	<threading>multi
 	<invariant-checks>full
@@ -59,8 +42,6 @@ project
 
 test-suite libtorrent : 	
 	[ run test_file_storage.cpp ]
-	[ run test_peer_priority.cpp ]
-	[ run test_file.cpp ]
 	[ run test_privacy.cpp ]
 	[ run test_threads.cpp ]
 	[ run test_rss.cpp ]
@@ -70,11 +51,6 @@ test-suite libtorrent :
 	[ run test_bencoding.cpp ]
 	[ run test_fast_extension.cpp ]
 	[ run test_primitives.cpp ]
-	[ run test_http_parser.cpp ]
-	[ run test_packet_buffer.cpp ]
-	[ run test_string.cpp ]
-	[ run test_magnet.cpp ]
-	[ run test_xml.cpp ]
 	[ run test_ip_filter.cpp ]
 	[ run test_hasher.cpp ]
 	[ run test_dht.cpp ]
@@ -82,6 +58,7 @@ test-suite libtorrent :
 	[ run test_torrent_parse.cpp ]
 	[ run test_session.cpp ]
 	[ run test_upnp.cpp ]
+	[ run test_read_piece.cpp ]
 
 	[ run test_ssl.cpp ]
 	[ run test_tracker.cpp ]

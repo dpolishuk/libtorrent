@@ -77,10 +77,6 @@ enum flags_t
 
 void test_proxy(proxy_settings::proxy_type proxy_type, int flags)
 {
-#ifdef TORRENT_DISABLE_DHT
-	// if DHT is disabled, we won't get any requests to it
-	flags &= ~expect_dht_msg;
-#endif
 	fprintf(stderr, "\n=== TEST == proxy: %s anonymous-mode: %s\n\n", proxy_name[proxy_type], (flags & anonymous_mode) ? "yes" : "no");
 	int http_port = start_web_server();
 	int udp_port = start_tracker();
@@ -97,14 +93,10 @@ void test_proxy(proxy_settings::proxy_type proxy_type, int flags)
 	session* s = new libtorrent::session(fingerprint("LT", 0, 1, 0, 0), std::make_pair(48875, 49800), "0.0.0.0", 0, alert_mask);
 
 	session_settings sett;
-	sett.stop_tracker_timeout = 1;
-	sett.tracker_completion_timeout = 1;
-	sett.tracker_receive_timeout = 1;
 	sett.half_open_limit = 1;
 	sett.announce_to_all_trackers = true;
 	sett.announce_to_all_tiers = true;
 	sett.anonymous_mode = flags & anonymous_mode;
-	sett.force_proxy = flags & anonymous_mode;
 
 	// if we don't do this, the peer connection test
 	// will be delayed by several seconds, by first
@@ -142,7 +134,6 @@ void test_proxy(proxy_settings::proxy_type proxy_type, int flags)
 	addp.dht_nodes.push_back(std::pair<std::string, int>("127.0.0.1", dht_port));
 	torrent_handle h = s->add_torrent(addp);
 
-	printf("connect_peer: 127.0.0.1:%d\n", peer_port);
 	h.connect_peer(tcp::endpoint(address_v4::from_string("127.0.0.1"), peer_port));
 
 	rejected_trackers.clear();
@@ -150,11 +141,6 @@ void test_proxy(proxy_settings::proxy_type proxy_type, int flags)
 	{
 		print_alerts(*s, "s", false, false, false, &alert_predicate);
 		test_sleep(100);
-
-		if (g_udp_tracker_requests >= prev_udp_announces + 1
-			&& g_http_tracker_requests >= prev_http_announces + 1
-			&& num_peer_hits() > 0)
-			break;
 	}
 
 	// we should have announced to the tracker by now

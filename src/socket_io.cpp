@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2009-2012, Arvid Norberg
+Copyright (c) 2009, Arvid Norberg
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -37,6 +37,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "libtorrent/socket.hpp"
 #include "libtorrent/socket_io.hpp"
 #include "libtorrent/address.hpp"
+#include "libtorrent/io.hpp" // for write_uint16
 #include "libtorrent/hasher.hpp" // for hasher
 
 namespace libtorrent
@@ -50,32 +51,42 @@ namespace libtorrent
 
 	std::string address_to_bytes(address const& a)
 	{
-#if TORRENT_USE_IPV6
-		if (a.is_v6())
-		{
-			address_v6::bytes_type b = a.to_v6().to_bytes();
-			return std::string((char*)&b[0], b.size());
-		}
-		else
-#endif
-		{
-			address_v4::bytes_type b = a.to_v4().to_bytes();
-			return std::string((char*)&b[0], b.size());
-		}
+		std::string ret;
+		std::back_insert_iterator<std::string> out(ret);
+		detail::write_address(a, out);
+		return ret;
+	}
+
+	std::string endpoint_to_bytes(udp::endpoint const& ep)
+	{
+		std::string ret;
+		std::back_insert_iterator<std::string> out(ret);
+		detail::write_endpoint(ep, out);
+		return ret;
 	}
 
 	std::string print_endpoint(tcp::endpoint const& ep)
 	{
 		error_code ec;
-		char buf[200];
+		std::string ret;
 		address const& addr = ep.address();
 #if TORRENT_USE_IPV6
 		if (addr.is_v6())
-			snprintf(buf, sizeof(buf), "[%s]:%d", addr.to_string(ec).c_str(), ep.port());
+		{
+			ret += '[';
+			ret += addr.to_string(ec);
+			ret += ']';
+			ret += ':';
+			ret += to_string(ep.port()).elems;
+		}
 		else
 #endif
-			snprintf(buf, sizeof(buf), "%s:%d", addr.to_string(ec).c_str(), ep.port());
-		return buf;
+		{
+			ret += addr.to_string(ec);
+			ret += ':';
+			ret += to_string(ep.port()).elems;
+		}
+		return ret;
 	}
 
 	std::string print_endpoint(udp::endpoint const& ep)

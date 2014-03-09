@@ -3,12 +3,13 @@
    <div id="librarySidebar">
 
 * download_
+* `download python binding`_
 * features_
 * contributing_
 * `building libtorrent`_
 * examples_
-* `library overview`_
-* `reference documentation`_
+* `api documentation`_
+* `create torrents`_
 * `running tests`_
 * `tuning`_
 * screenshot_
@@ -53,13 +54,14 @@ Bindings
 libtorrent
 ==========
 
-.. _download: http://code.google.com/p/libtorrent/downloads/list
+.. _download: https://sourceforge.net/projects/libtorrent/files/libtorrent/
+.. _`download python binding`: https://sourceforge.net/projects/libtorrent/files/py-libtorrent/
 .. _features: features.html
 .. _contributing: contributing.html
 .. _`building libtorrent`: building.html
 .. _examples: examples.html
-.. _`library overview`: manual-ref.html
-.. _`reference documentation`: reference.html
+.. _`api documentation`: manual.html
+.. _`create torrents`: make_torrent.html
 .. _`running tests`: running_tests.html
 .. _`tuning`: tuning.html
 .. _screenshot: client_test.png
