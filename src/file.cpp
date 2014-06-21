@@ -912,6 +912,14 @@ namespace libtorrent
 	};
 #endif // TORRENT_WINDOWS
 
+
+#ifdef TORRENT_WINDOWS
+	bool get_manage_volume_privs();
+
+	// this needs to be run before CreateFile
+	bool file::has_manage_volume_privs = get_manage_volume_privs();
+#endif
+
 	file::file()
 #ifdef TORRENT_WINDOWS
 		: m_file_handle(INVALID_HANDLE_VALUE)
@@ -1108,7 +1116,7 @@ namespace libtorrent
 				0, // start offset
 				0, // length (0 = until EOF)
 				getpid(), // owner
-				short((mode & write_only) ? F_WRLCK : F_RDLCK), // lock type
+				short((mode != read_only) ? F_WRLCK : F_RDLCK), // lock type
 				SEEK_SET // whence
 			};
 			if (fcntl(m_fd, F_SETLK, &l) != 0)
@@ -1287,7 +1295,7 @@ typedef struct _FILE_ALLOCATED_RANGE_BUFFER {
 		// the flag
 		int rw_mode = m_open_mode & rw_mask;
 		bool use_overlapped = m_open_mode & no_buffer;
-		if ((rw_mode == read_write || rw_mode == write_only)
+		if ((rw_mode != read_only)
 			&& (m_open_mode & sparse)
 			&& !is_sparse(m_file_handle, use_overlapped))
 		{
@@ -1988,8 +1996,6 @@ typedef struct _FILE_ALLOCATED_RANGE_BUFFER {
 
 	void set_file_valid_data(HANDLE f, boost::int64_t size)
 	{
-		static bool has_privs = get_manage_volume_privs();
-
 		typedef BOOL (WINAPI *SetFileValidData_t)(HANDLE, LONGLONG);
 		static SetFileValidData_t pSetFileValidData = NULL;
 		static bool failed_kernel32 = false;
