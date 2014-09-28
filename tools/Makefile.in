@@ -102,7 +102,7 @@ am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 mkinstalldirs = $(install_sh) -d
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
-am__EXEEXT_1 = parse_hash_fails$(EXEEXT)
+am__EXEEXT_1 = parse_hash_fails$(EXEEXT) parse_request_log$(EXEEXT)
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
 am_parse_hash_fails_OBJECTS = parse_hash_fails.$(OBJEXT)
@@ -114,6 +114,11 @@ AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
 am__v_lt_1 = 
+am_parse_request_log_OBJECTS = parse_request_log.$(OBJEXT)
+parse_request_log_OBJECTS = $(am_parse_request_log_OBJECTS)
+parse_request_log_LDADD = $(LDADD)
+parse_request_log_DEPENDENCIES =  \
+	$(top_builddir)/src/libtorrent-rasterbar.la
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -148,8 +153,9 @@ AM_V_CXXLD = $(am__v_CXXLD_@AM_V@)
 am__v_CXXLD_ = $(am__v_CXXLD_@AM_DEFAULT_V@)
 am__v_CXXLD_0 = @echo "  CXXLD   " $@;
 am__v_CXXLD_1 = 
-SOURCES = $(parse_hash_fails_SOURCES)
-DIST_SOURCES = $(parse_hash_fails_SOURCES)
+SOURCES = $(parse_hash_fails_SOURCES) $(parse_request_log_SOURCES)
+DIST_SOURCES = $(parse_hash_fails_SOURCES) \
+	$(parse_request_log_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -257,7 +263,6 @@ PTHREAD_LIBS = @PTHREAD_LIBS@
 PYTHON = @PYTHON@
 PYTHON_CPPFLAGS = @PYTHON_CPPFLAGS@
 PYTHON_EXEC_PREFIX = @PYTHON_EXEC_PREFIX@
-PYTHON_EXTRA_LDFLAGS = @PYTHON_EXTRA_LDFLAGS@
 PYTHON_EXTRA_LIBS = @PYTHON_EXTRA_LIBS@
 PYTHON_INSTALL_PARAMS = @PYTHON_INSTALL_PARAMS@
 PYTHON_LDFLAGS = @PYTHON_LDFLAGS@
@@ -334,11 +339,29 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 tool_programs = \
-  parse_hash_fails
+  parse_hash_fails \
+  parse_request_log
 
-EXTRA_DIST = Jamfile
+EXTRA_DIST = Jamfile     \
+  parse_bandwidth_log.py \
+  parse_buffer_log.py    \
+  parse_dht_log.py       \
+  parse_dht_rtt.py       \
+  parse_dht_stats.py     \
+  parse_disk_access.py   \
+  parse_disk_buffer_log.py\
+  parse_disk_log.py      \
+  parse_memory_log.py    \
+  parse_peer_log.py      \
+  parse_sample.py        \
+  parse_session_stats.py \
+  parse_test_results.py  \
+  parse_utp_log.py       \
+  run_regression_tests.py\
+  run_tests.py
+
 parse_hash_fails_SOURCES = parse_hash_fails.cpp
-#client_test_LDADD = $(top_builddir)/src/libtorrent-rasterbar.la
+parse_request_log_SOURCES = parse_request_log.cpp
 LDADD = $(top_builddir)/src/libtorrent-rasterbar.la
 AM_CPPFLAGS = -ftemplate-depth-50 -I$(top_srcdir)/include @DEBUGFLAGS@
 AM_LDFLAGS = @BOOST_SYSTEM_LIB@
@@ -430,6 +453,10 @@ parse_hash_fails$(EXEEXT): $(parse_hash_fails_OBJECTS) $(parse_hash_fails_DEPEND
 	@rm -f parse_hash_fails$(EXEEXT)
 	$(AM_V_CXXLD)$(CXXLINK) $(parse_hash_fails_OBJECTS) $(parse_hash_fails_LDADD) $(LIBS)
 
+parse_request_log$(EXEEXT): $(parse_request_log_OBJECTS) $(parse_request_log_DEPENDENCIES) $(EXTRA_parse_request_log_DEPENDENCIES) 
+	@rm -f parse_request_log$(EXEEXT)
+	$(AM_V_CXXLD)$(CXXLINK) $(parse_request_log_OBJECTS) $(parse_request_log_LDADD) $(LIBS)
+
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
 
@@ -437,6 +464,7 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/parse_hash_fails.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/parse_request_log.Po@am__quote@
 
 .cpp.o:
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXXCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<

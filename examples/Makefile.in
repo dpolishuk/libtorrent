@@ -103,10 +103,8 @@ mkinstalldirs = $(install_sh) -d
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__EXEEXT_1 = client_test$(EXEEXT) dump_torrent$(EXEEXT) \
-	enum_if$(EXEEXT) fragmentation_test$(EXEEXT) \
 	make_torrent$(EXEEXT) simple_client$(EXEEXT) \
-	rss_reader$(EXEEXT) parse_request_log$(EXEEXT) \
-	upnp_test$(EXEEXT) utp_test$(EXEEXT) \
+	rss_reader$(EXEEXT) upnp_test$(EXEEXT) \
 	connection_tester$(EXEEXT)
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
@@ -129,24 +127,10 @@ dump_torrent_OBJECTS = $(am_dump_torrent_OBJECTS)
 dump_torrent_LDADD = $(LDADD)
 dump_torrent_DEPENDENCIES =  \
 	$(top_builddir)/src/libtorrent-rasterbar.la
-am_enum_if_OBJECTS = enum_if.$(OBJEXT)
-enum_if_OBJECTS = $(am_enum_if_OBJECTS)
-enum_if_LDADD = $(LDADD)
-enum_if_DEPENDENCIES = $(top_builddir)/src/libtorrent-rasterbar.la
-am_fragmentation_test_OBJECTS = fragmentation_test.$(OBJEXT)
-fragmentation_test_OBJECTS = $(am_fragmentation_test_OBJECTS)
-fragmentation_test_LDADD = $(LDADD)
-fragmentation_test_DEPENDENCIES =  \
-	$(top_builddir)/src/libtorrent-rasterbar.la
 am_make_torrent_OBJECTS = make_torrent.$(OBJEXT)
 make_torrent_OBJECTS = $(am_make_torrent_OBJECTS)
 make_torrent_LDADD = $(LDADD)
 make_torrent_DEPENDENCIES =  \
-	$(top_builddir)/src/libtorrent-rasterbar.la
-am_parse_request_log_OBJECTS = parse_request_log.$(OBJEXT)
-parse_request_log_OBJECTS = $(am_parse_request_log_OBJECTS)
-parse_request_log_LDADD = $(LDADD)
-parse_request_log_DEPENDENCIES =  \
 	$(top_builddir)/src/libtorrent-rasterbar.la
 am_rss_reader_OBJECTS = rss_reader.$(OBJEXT)
 rss_reader_OBJECTS = $(am_rss_reader_OBJECTS)
@@ -161,10 +145,6 @@ am_upnp_test_OBJECTS = upnp_test.$(OBJEXT)
 upnp_test_OBJECTS = $(am_upnp_test_OBJECTS)
 upnp_test_LDADD = $(LDADD)
 upnp_test_DEPENDENCIES = $(top_builddir)/src/libtorrent-rasterbar.la
-am_utp_test_OBJECTS = rss_reader.$(OBJEXT)
-utp_test_OBJECTS = $(am_utp_test_OBJECTS)
-utp_test_LDADD = $(LDADD)
-utp_test_DEPENDENCIES = $(top_builddir)/src/libtorrent-rasterbar.la
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -200,17 +180,13 @@ am__v_CXXLD_ = $(am__v_CXXLD_@AM_DEFAULT_V@)
 am__v_CXXLD_0 = @echo "  CXXLD   " $@;
 am__v_CXXLD_1 = 
 SOURCES = $(client_test_SOURCES) $(connection_tester_SOURCES) \
-	$(dump_torrent_SOURCES) $(enum_if_SOURCES) \
-	$(fragmentation_test_SOURCES) $(make_torrent_SOURCES) \
-	$(parse_request_log_SOURCES) $(rss_reader_SOURCES) \
-	$(simple_client_SOURCES) $(upnp_test_SOURCES) \
-	$(utp_test_SOURCES)
+	$(dump_torrent_SOURCES) $(make_torrent_SOURCES) \
+	$(rss_reader_SOURCES) $(simple_client_SOURCES) \
+	$(upnp_test_SOURCES)
 DIST_SOURCES = $(client_test_SOURCES) $(connection_tester_SOURCES) \
-	$(dump_torrent_SOURCES) $(enum_if_SOURCES) \
-	$(fragmentation_test_SOURCES) $(make_torrent_SOURCES) \
-	$(parse_request_log_SOURCES) $(rss_reader_SOURCES) \
-	$(simple_client_SOURCES) $(upnp_test_SOURCES) \
-	$(utp_test_SOURCES)
+	$(dump_torrent_SOURCES) $(make_torrent_SOURCES) \
+	$(rss_reader_SOURCES) $(simple_client_SOURCES) \
+	$(upnp_test_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -318,7 +294,6 @@ PTHREAD_LIBS = @PTHREAD_LIBS@
 PYTHON = @PYTHON@
 PYTHON_CPPFLAGS = @PYTHON_CPPFLAGS@
 PYTHON_EXEC_PREFIX = @PYTHON_EXEC_PREFIX@
-PYTHON_EXTRA_LDFLAGS = @PYTHON_EXTRA_LDFLAGS@
 PYTHON_EXTRA_LIBS = @PYTHON_EXTRA_LIBS@
 PYTHON_INSTALL_PARAMS = @PYTHON_INSTALL_PARAMS@
 PYTHON_LDFLAGS = @PYTHON_LDFLAGS@
@@ -397,14 +372,10 @@ top_srcdir = @top_srcdir@
 example_programs = \
   client_test       \
   dump_torrent      \
-  enum_if           \
-  fragmentation_test\
   make_torrent      \
   simple_client     \
   rss_reader        \
-  parse_request_log \
   upnp_test         \
-  utp_test          \
   connection_tester
 
 EXTRA_DIST = Jamfile
@@ -416,18 +387,10 @@ make_torrent_SOURCES = make_torrent.cpp
 #make_torrent_LDADD = $(top_builddir)/src/libtorrent-rasterbar.la
 simple_client_SOURCES = simple_client.cpp
 #simple_client_LDADD = $(top_builddir)/src/libtorrent-rasterbar.la
-enum_if_SOURCES = enum_if.cpp
-#enum_if_LDADD = $(top_builddir)/src/libtorrent-rasterbar.la
 connection_tester_SOURCES = connection_tester.cpp
 #connection_tester_LDADD = $(top_builddir)/src/libtorrent-rasterbar.la
 rss_reader_SOURCES = rss_reader.cpp
 #rss_reader_LDADD = $(top_builddir)/src/libtorrent-rasterbar.la
-utp_test_SOURCES = rss_reader.cpp
-#utp_test_LDADD = $(top_builddir)/src/libtorrent-rasterbar.la
-parse_request_log_SOURCES = parse_request_log.cpp
-#parse_request_log_LDADD = $(top_builddir)/src/libtorrent-rasterbar.la
-fragmentation_test_SOURCES = fragmentation_test.cpp
-#fragmentation_test_LDADD = $(top_builddir)/src/libtorrent-rasterbar.la
 upnp_test_SOURCES = upnp_test.cpp
 #upnp_test_LDADD = $(top_builddir)/src/libtorrent-rasterbar.la
 LDADD = $(top_builddir)/src/libtorrent-rasterbar.la
@@ -529,21 +492,9 @@ dump_torrent$(EXEEXT): $(dump_torrent_OBJECTS) $(dump_torrent_DEPENDENCIES) $(EX
 	@rm -f dump_torrent$(EXEEXT)
 	$(AM_V_CXXLD)$(CXXLINK) $(dump_torrent_OBJECTS) $(dump_torrent_LDADD) $(LIBS)
 
-enum_if$(EXEEXT): $(enum_if_OBJECTS) $(enum_if_DEPENDENCIES) $(EXTRA_enum_if_DEPENDENCIES) 
-	@rm -f enum_if$(EXEEXT)
-	$(AM_V_CXXLD)$(CXXLINK) $(enum_if_OBJECTS) $(enum_if_LDADD) $(LIBS)
-
-fragmentation_test$(EXEEXT): $(fragmentation_test_OBJECTS) $(fragmentation_test_DEPENDENCIES) $(EXTRA_fragmentation_test_DEPENDENCIES) 
-	@rm -f fragmentation_test$(EXEEXT)
-	$(AM_V_CXXLD)$(CXXLINK) $(fragmentation_test_OBJECTS) $(fragmentation_test_LDADD) $(LIBS)
-
 make_torrent$(EXEEXT): $(make_torrent_OBJECTS) $(make_torrent_DEPENDENCIES) $(EXTRA_make_torrent_DEPENDENCIES) 
 	@rm -f make_torrent$(EXEEXT)
 	$(AM_V_CXXLD)$(CXXLINK) $(make_torrent_OBJECTS) $(make_torrent_LDADD) $(LIBS)
-
-parse_request_log$(EXEEXT): $(parse_request_log_OBJECTS) $(parse_request_log_DEPENDENCIES) $(EXTRA_parse_request_log_DEPENDENCIES) 
-	@rm -f parse_request_log$(EXEEXT)
-	$(AM_V_CXXLD)$(CXXLINK) $(parse_request_log_OBJECTS) $(parse_request_log_LDADD) $(LIBS)
 
 rss_reader$(EXEEXT): $(rss_reader_OBJECTS) $(rss_reader_DEPENDENCIES) $(EXTRA_rss_reader_DEPENDENCIES) 
 	@rm -f rss_reader$(EXEEXT)
@@ -557,10 +508,6 @@ upnp_test$(EXEEXT): $(upnp_test_OBJECTS) $(upnp_test_DEPENDENCIES) $(EXTRA_upnp_
 	@rm -f upnp_test$(EXEEXT)
 	$(AM_V_CXXLD)$(CXXLINK) $(upnp_test_OBJECTS) $(upnp_test_LDADD) $(LIBS)
 
-utp_test$(EXEEXT): $(utp_test_OBJECTS) $(utp_test_DEPENDENCIES) $(EXTRA_utp_test_DEPENDENCIES) 
-	@rm -f utp_test$(EXEEXT)
-	$(AM_V_CXXLD)$(CXXLINK) $(utp_test_OBJECTS) $(utp_test_LDADD) $(LIBS)
-
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
 
@@ -570,10 +517,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/client_test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/connection_tester.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dump_torrent.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/enum_if.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/fragmentation_test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/make_torrent.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/parse_request_log.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/rss_reader.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/simple_client.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/upnp_test.Po@am__quote@

@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2006, Arvid Norberg & Daniel Wallin
+Copyright (c) 2006-2014, Arvid Norberg & Daniel Wallin
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -30,8 +30,6 @@ POSSIBILITY OF SUCH DAMAGE.
 
 */
 
-#include "libtorrent/pch.hpp"
-
 #include <libtorrent/kademlia/refresh.hpp>
 #include <libtorrent/kademlia/rpc_manager.hpp>
 #include <libtorrent/kademlia/node.hpp>
@@ -49,7 +47,7 @@ refresh::refresh(
 	node_impl& node
 	, node_id target
 	, done_callback const& callback)
-	: find_data(node, target, find_data::data_callback(), callback, false)
+	: get_peers(node, target, get_peers::data_callback(), callback, false)
 {
 }
 
@@ -61,7 +59,7 @@ char const* refresh::name() const
 observer_ptr refresh::new_observer(void* ptr
 	, udp::endpoint const& ep, node_id const& id)
 {
-	observer_ptr o(new (ptr) find_data_observer(this, ep, id));
+	observer_ptr o(new (ptr) get_peers_observer(this, ep, id));
 #if defined TORRENT_DEBUG || TORRENT_RELEASE_ASSERTS
 	o->m_in_constructor = false;
 #endif

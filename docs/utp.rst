@@ -3,7 +3,7 @@ libtorrent manual
 =================
 
 :Author: Arvid Norberg, arvid@rasterbar.com
-:Version: 0.16.17
+:Version: 1.0.2
 
 .. contents:: Table of contents
   :depth: 2

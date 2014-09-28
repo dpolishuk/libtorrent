@@ -396,6 +396,11 @@ void bind_alert()
         .add_property("status", &get_status_from_update_alert)
         ;
 
+    class_<i2p_alert, bases<alert>, noncopyable>(
+        "i2p_alert", no_init)
+        .add_property("error", &i2p_alert::error)
+        ;
+
     class_<dht_reply_alert, bases<tracker_alert>, noncopyable>(
         "dht_reply_alert", no_init)
         .def_readonly("num_peers", &dht_reply_alert::num_peers)
@@ -529,4 +534,10 @@ void bind_alert()
        .def_readonly("error", &add_torrent_alert::error)
        .add_property("params", &get_params)
        ;
+
+    class_<torrent_update_alert, bases<torrent_alert>, noncopyable>(
+       "torrent_update_alert", no_init)
+        .def_readonly("old_ih", &torrent_update_alert::old_ih)
+        .def_readonly("new_ih", &torrent_update_alert::new_ih)
+        ;
 }

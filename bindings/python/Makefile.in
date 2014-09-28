@@ -80,7 +80,7 @@ host_triplet = @host@
 target_triplet = @target@
 subdir = bindings/python
 DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
-	$(srcdir)/setup.py.in
+	$(srcdir)/link_flags.in $(srcdir)/compile_flags.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/ax_boost_base.m4 \
 	$(top_srcdir)/m4/ax_boost_python.m4 \
@@ -97,7 +97,7 @@ am__aclocal_m4_deps = $(top_srcdir)/m4/ax_boost_base.m4 \
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 mkinstalldirs = $(install_sh) -d
-CONFIG_CLEAN_FILES = setup.py
+CONFIG_CLEAN_FILES = link_flags compile_flags
 CONFIG_CLEAN_VPATH_FILES =
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
@@ -202,7 +202,6 @@ PTHREAD_LIBS = @PTHREAD_LIBS@
 PYTHON = @PYTHON@
 PYTHON_CPPFLAGS = @PYTHON_CPPFLAGS@
 PYTHON_EXEC_PREFIX = @PYTHON_EXEC_PREFIX@
-PYTHON_EXTRA_LDFLAGS = @PYTHON_EXTRA_LDFLAGS@
 PYTHON_EXTRA_LIBS = @PYTHON_EXTRA_LIBS@
 PYTHON_INSTALL_PARAMS = @PYTHON_INSTALL_PARAMS@
 PYTHON_LDFLAGS = @PYTHON_LDFLAGS@
@@ -302,7 +301,6 @@ EXTRA_DIST = \
   src/session.cpp           \
   src/session_settings.cpp  \
   src/string.cpp            \
-  src/torrent.cpp           \
   src/torrent_handle.cpp    \
   src/torrent_info.cpp      \
   src/torrent_status.cpp    \
@@ -342,7 +340,9 @@ $(top_srcdir)/configure:  $(am__configure_deps)
 $(ACLOCAL_M4):  $(am__aclocal_m4_deps)
 	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
 $(am__aclocal_m4_deps):
-setup.py: $(top_builddir)/config.status $(srcdir)/setup.py.in
+link_flags: $(top_builddir)/config.status $(srcdir)/link_flags.in
+	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
+compile_flags: $(top_builddir)/config.status $(srcdir)/compile_flags.in
 	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
 
 mostlyclean-libtool:
